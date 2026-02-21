@@ -4,9 +4,6 @@ import { homedir } from "node:os";
 import { parse, stringify } from "smol-toml";
 
 export interface WonderTwinsConfig {
-  general: {
-    max_rounds: number;
-  };
   claude: {
     model: string;
   };
@@ -16,9 +13,6 @@ export interface WonderTwinsConfig {
 }
 
 const DEFAULT_CONFIG: WonderTwinsConfig = {
-  general: {
-    max_rounds: 2,
-  },
   claude: {
     model: "sonnet",
   },
@@ -53,7 +47,6 @@ export function loadConfig(): WonderTwinsConfig {
     const raw = readFileSync(configPath, "utf-8");
     const parsed = parse(raw) as any;
     return {
-      general: { ...DEFAULT_CONFIG.general, ...parsed.general },
       claude: { ...DEFAULT_CONFIG.claude, ...parsed.claude },
       codex: { ...DEFAULT_CONFIG.codex, ...parsed.codex },
     };
@@ -76,14 +69,7 @@ export function setConfigValue(
   const parts = key.split(".");
 
   if (parts.length === 1) {
-    // Shorthand keys
     switch (parts[0]) {
-      case "max_rounds": {
-        const n = parseInt(value, 10);
-        if (isNaN(n) || n < 1) throw new Error("max_rounds must be a positive integer");
-        config.general.max_rounds = n;
-        break;
-      }
       case "claude_model":
         config.claude.model = value;
         break;
@@ -95,11 +81,7 @@ export function setConfigValue(
     }
   } else if (parts.length === 2) {
     const [section, field] = parts;
-    if (section === "general" && field === "max_rounds") {
-      const n = parseInt(value, 10);
-      if (isNaN(n) || n < 1) throw new Error("max_rounds must be a positive integer");
-      config.general.max_rounds = n;
-    } else if (section === "claude" && field === "model") {
+    if (section === "claude" && field === "model") {
       config.claude.model = value;
     } else if (section === "codex" && field === "model") {
       config.codex.model = value;

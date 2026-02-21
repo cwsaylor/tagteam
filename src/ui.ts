@@ -30,16 +30,6 @@ export function renderUserPrompt(prompt: string): void {
   console.log();
 }
 
-export function renderRoundHeader(round: number, maxRounds: number): void {
-  const label =
-    round === 0
-      ? "Round 1"
-      : `Round ${round + 1} (Discussion)`;
-  const line = chalk.dim("─".repeat(55));
-  console.log(` ${chalk.dim("──")} ${chalk.bold(label)} ${line}`);
-  console.log();
-}
-
 export function renderAgentResponse(agent: AgentName, text: string): void {
   const color = AGENT_COLORS[agent];
   const label = AGENT_LABELS[agent];
@@ -97,8 +87,4 @@ export function createSpinner(agent: AgentName): Ora {
     color,
     indent: 1,
   });
-}
-
-export function renderInteractivePromptMarker(): void {
-  process.stdout.write(` ${chalk.bold(">")} `);
 }

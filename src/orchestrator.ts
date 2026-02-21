@@ -12,7 +12,6 @@ import {
 import {
   renderHeader,
   renderUserPrompt,
-  renderRoundHeader,
   renderAgentResponse,
   renderError,
   renderFooter,
@@ -24,14 +23,13 @@ import type { WonderTwinsConfig } from "./config.js";
 export interface OrchestratorOptions {
   prompt: string;
   sessionId?: string;
-  maxRounds?: number;
   claudeModel?: string;
   codexModel?: string;
   config: WonderTwinsConfig;
 }
 
+/** Run a single round: send prompt to both agents in parallel, display results. */
 export async function orchestrate(options: OrchestratorOptions): Promise<string> {
-  const maxRounds = options.maxRounds ?? options.config.general.max_rounds;
   const claudeModel = options.claudeModel ?? options.config.claude.model;
   const codexModel = options.codexModel ?? options.config.codex.model;
   const cwd = process.cwd();
@@ -41,7 +39,7 @@ export async function orchestrate(options: OrchestratorOptions): Promise<string>
   const isResume = !!options.sessionId;
 
   if (!isResume) {
-    createSession(sessionId, cwd, maxRounds);
+    createSession(sessionId, cwd);
   }
 
   renderHeader(sessionId);
@@ -54,154 +52,121 @@ export async function orchestrate(options: OrchestratorOptions): Promise<string>
     existingMessages.length > 0
       ? Math.max(...existingMessages.map((m) => m.round))
       : -1;
-  const currentRound = lastRound + 1;
+  const roundNum = lastRound + 1;
 
   // Save user message
   insertMessage({
     sessionId,
     role: "user",
     content: options.prompt,
-    round: currentRound,
+    round: roundNum,
   });
 
   renderUserPrompt(options.prompt);
 
-  // Build conversation history from existing messages
-  const conversationLog: Array<{
-    role: string;
-    agent?: AgentName;
-    content: string;
-    round: number;
-  }> = existingMessages.map((m) => ({
-    role: m.role,
-    agent: m.role === "claude" || m.role === "codex" ? (m.role as AgentName) : undefined,
-    content: m.content,
-    round: m.round,
-  }));
+  // Build prompt and system prompt for agents
+  let claudePrompt: string;
+  let codexPrompt: string;
+  let claudeSystemPrompt: string;
+  let codexSystemPrompt: string;
 
-  // Add current user message
-  conversationLog.push({
-    role: "user",
-    content: options.prompt,
-    round: currentRound,
-  });
+  if (!isResume && existingMessages.length === 0) {
+    // First round, no history
+    claudePrompt = options.prompt;
+    codexPrompt = options.prompt;
+    claudeSystemPrompt = collaborationPrompt("claude");
+    codexSystemPrompt = collaborationPrompt("codex");
+  } else {
+    // Has history: build conversation log and use discussion prompt
+    const conversationLog = existingMessages.map((m) => ({
+      role: m.role,
+      agent: m.role === "claude" || m.role === "codex" ? (m.role as AgentName) : undefined,
+      content: m.content,
+    }));
+    conversationLog.push({ role: "user", agent: undefined, content: options.prompt });
 
-  // Run rounds
-  for (let round = 0; round < maxRounds; round++) {
-    const roundNum = currentRound + round;
-    renderRoundHeader(round, maxRounds);
+    const history = formatConversationHistory(conversationLog);
+    claudeSystemPrompt = discussionPrompt("claude", history);
+    codexSystemPrompt = discussionPrompt("codex", history);
+    claudePrompt = "Provide your response for this round.";
+    codexPrompt = "Provide your response for this round.";
+  }
 
-    // Build the prompt for this round
-    let claudePrompt: string;
-    let codexPrompt: string;
-    let claudeSystemPrompt: string;
-    let codexSystemPrompt: string;
+  // Run both agents in parallel
+  const claudeSpinner = createSpinner("claude");
+  const codexSpinner = createSpinner("codex");
 
-    if (round === 0 && !isResume) {
-      // First round, no history: just the user prompt with collaboration context
-      claudePrompt = options.prompt;
-      codexPrompt = options.prompt;
-      claudeSystemPrompt = collaborationPrompt("claude");
-      codexSystemPrompt = collaborationPrompt("codex");
+  claudeSpinner.start();
+  codexSpinner.start();
+
+  const [claudeResult, codexResult] = await Promise.allSettled([
+    runClaude({
+      prompt: claudePrompt,
+      systemPrompt: claudeSystemPrompt,
+      model: claudeModel,
+      cwd,
+    }),
+    runCodex({
+      prompt: codexPrompt,
+      systemPrompt: codexSystemPrompt,
+      model: codexModel,
+      cwd,
+    }),
+  ]);
+
+  claudeSpinner.stop();
+  codexSpinner.stop();
+
+  // Process Claude response
+  if (claudeResult.status === "fulfilled") {
+    const resp = claudeResult.value;
+    if (resp.error) {
+      renderError("claude", resp.error);
     } else {
-      // Discussion round or resume: include full history
-      const history = formatConversationHistory(conversationLog);
-      claudeSystemPrompt = discussionPrompt("claude", history);
-      codexSystemPrompt = discussionPrompt("codex", history);
-      claudePrompt = "Provide your response for this round.";
-      codexPrompt = "Provide your response for this round.";
+      renderAgentResponse("claude", resp.text);
     }
+    insertMessage({
+      sessionId,
+      role: "claude",
+      content: resp.error || resp.text,
+      round: roundNum,
+      durationMs: resp.durationMs,
+    });
+  } else {
+    const errorMsg = claudeResult.reason?.message || "Failed to run";
+    renderError("claude", errorMsg);
+    insertMessage({
+      sessionId,
+      role: "claude",
+      content: `[Error: ${errorMsg}]`,
+      round: roundNum,
+    });
+  }
 
-    // Run both agents in parallel
-    const claudeSpinner = createSpinner("claude");
-    const codexSpinner = createSpinner("codex");
-
-    claudeSpinner.start();
-    codexSpinner.start();
-
-    const [claudeResult, codexResult] = await Promise.allSettled([
-      runClaude({
-        prompt: claudePrompt,
-        systemPrompt: claudeSystemPrompt,
-        model: claudeModel,
-        cwd,
-      }),
-      runCodex({
-        prompt: codexPrompt,
-        systemPrompt: codexSystemPrompt,
-        model: codexModel,
-        cwd,
-      }),
-    ]);
-
-    claudeSpinner.stop();
-    codexSpinner.stop();
-
-    // Process Claude response
-    if (claudeResult.status === "fulfilled") {
-      const resp = claudeResult.value;
-      if (resp.error) {
-        renderError("claude", resp.error);
-      } else {
-        renderAgentResponse("claude", resp.text);
-      }
-      const content = resp.error || resp.text;
-      insertMessage({
-        sessionId,
-        role: "claude",
-        content,
-        round: roundNum,
-        durationMs: resp.durationMs,
-      });
-      conversationLog.push({
-        role: "claude",
-        agent: "claude",
-        content,
-        round: roundNum,
-      });
+  // Process Codex response
+  if (codexResult.status === "fulfilled") {
+    const resp = codexResult.value;
+    if (resp.error) {
+      renderError("codex", resp.error);
     } else {
-      const errorMsg = claudeResult.reason?.message || "Failed to run";
-      renderError("claude", errorMsg);
-      insertMessage({
-        sessionId,
-        role: "claude",
-        content: `[Error: ${errorMsg}]`,
-        round: roundNum,
-      });
+      renderAgentResponse("codex", resp.text);
     }
-
-    // Process Codex response
-    if (codexResult.status === "fulfilled") {
-      const resp = codexResult.value;
-      if (resp.error) {
-        renderError("codex", resp.error);
-      } else {
-        renderAgentResponse("codex", resp.text);
-      }
-      const content = resp.error || resp.text;
-      insertMessage({
-        sessionId,
-        role: "codex",
-        content,
-        round: roundNum,
-        durationMs: resp.durationMs,
-      });
-      conversationLog.push({
-        role: "codex",
-        agent: "codex",
-        content,
-        round: roundNum,
-      });
-    } else {
-      const errorMsg = codexResult.reason?.message || "Failed to run";
-      renderError("codex", errorMsg);
-      insertMessage({
-        sessionId,
-        role: "codex",
-        content: `[Error: ${errorMsg}]`,
-        round: roundNum,
-      });
-    }
+    insertMessage({
+      sessionId,
+      role: "codex",
+      content: resp.error || resp.text,
+      round: roundNum,
+      durationMs: resp.durationMs,
+    });
+  } else {
+    const errorMsg = codexResult.reason?.message || "Failed to run";
+    renderError("codex", errorMsg);
+    insertMessage({
+      sessionId,
+      role: "codex",
+      content: `[Error: ${errorMsg}]`,
+      round: roundNum,
+    });
   }
 
   // Generate title from the first prompt if this is a new session
@@ -219,6 +184,7 @@ export async function orchestrate(options: OrchestratorOptions): Promise<string>
   return sessionId;
 }
 
+/** Run first prompt, then loop for follow-ups until /exit. */
 export async function orchestrateInteractive(
   options: OrchestratorOptions
 ): Promise<void> {
@@ -228,14 +194,12 @@ export async function orchestrateInteractive(
     output: process.stdout,
   });
 
-  // Run the first prompt
   const sessionId = await orchestrate(options);
 
-  // Interactive loop
   const askForInput = (): void => {
     rl.question(" > ", async (input) => {
       const trimmed = input.trim();
-      if (!trimmed || trimmed === "exit" || trimmed === "quit") {
+      if (!trimmed || trimmed === "/exit") {
         rl.close();
         closeDb();
         return;

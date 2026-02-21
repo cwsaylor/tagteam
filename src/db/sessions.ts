@@ -4,7 +4,6 @@ export interface Session {
   id: string;
   title: string | null;
   working_dir: string;
-  max_rounds: number;
   created_at: string;
   updated_at: string;
   status: string;
@@ -12,13 +11,12 @@ export interface Session {
 
 export function createSession(
   id: string,
-  workingDir: string,
-  maxRounds: number
+  workingDir: string
 ): Session {
   const db = getDb();
   db.prepare(
-    `INSERT INTO sessions (id, working_dir, max_rounds) VALUES (?, ?, ?)`
-  ).run(id, workingDir, maxRounds);
+    `INSERT INTO sessions (id, working_dir) VALUES (?, ?)`
+  ).run(id, workingDir);
 
   return getSession(id)!;
 }

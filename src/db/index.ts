@@ -26,7 +26,6 @@ function initSchema(db: Database.Database): void {
       id           TEXT PRIMARY KEY,
       title        TEXT,
       working_dir  TEXT NOT NULL,
-      max_rounds   INTEGER NOT NULL DEFAULT 2,
       created_at   TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
       status       TEXT NOT NULL DEFAULT 'active'

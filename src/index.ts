@@ -15,7 +15,6 @@ import {
   renderSessionList,
   renderAgentResponse,
   renderUserPrompt,
-  renderRoundHeader,
   renderFooter,
 } from "./ui.js";
 
@@ -25,7 +24,6 @@ program
   .name("wt")
   .description("Wonder Twins - Orchestrate Claude and Codex collaboratively")
   .version("0.1.0")
-  .option("--rounds <n>", "Number of rounds (initial + discussion)", parseInt)
   .option("--claude-model <model>", "Claude model to use")
   .option("--codex-model <model>", "Codex model to use")
   .argument("[prompt...]", "Prompt to send to both agents")
@@ -43,20 +41,19 @@ program
 
       console.log(
         chalk.dim(
-          " Wonder Twins interactive mode. Type your prompt, or \"exit\" to quit."
+          " Wonder Twins interactive mode. Type your prompt, or /exit to quit."
         )
       );
 
       rl.question(" > ", async (input) => {
         rl.close();
         const trimmed = input.trim();
-        if (!trimmed || trimmed === "exit" || trimmed === "quit") {
+        if (!trimmed || trimmed === "/exit") {
           return;
         }
 
         await orchestrateInteractive({
           prompt: trimmed,
-          maxRounds: opts.rounds,
           claudeModel: opts.claudeModel,
           codexModel: opts.codexModel,
           config,
@@ -65,23 +62,19 @@ program
       return;
     }
 
-    await orchestrate({
+    await orchestrateInteractive({
       prompt,
-      maxRounds: opts.rounds,
       claudeModel: opts.claudeModel,
       codexModel: opts.codexModel,
       config,
     });
-
-    closeDb();
   });
 
 // Continue most recent session
 program
   .command("continue")
   .description("Resume the most recent session")
-  .option("--rounds <n>", "Number of rounds", parseInt)
-  .action(async (opts) => {
+  .action(async () => {
     const config = loadConfig();
     const session = getMostRecentSession();
 
@@ -94,10 +87,8 @@ program
       chalk.dim(` Resuming session ${chalk.cyan(session.id.slice(0, 7))}...`)
     );
 
-    // Show existing conversation
     printTranscript(session.id);
 
-    // Ask for new input
     const readline = await import("node:readline");
     const rl = readline.createInterface({
       input: process.stdin,
@@ -107,19 +98,16 @@ program
     rl.question(" > ", async (input) => {
       rl.close();
       const trimmed = input.trim();
-      if (!trimmed) {
+      if (!trimmed || trimmed === "/exit") {
         closeDb();
         return;
       }
 
-      await orchestrate({
+      await orchestrateInteractive({
         prompt: trimmed,
         sessionId: session.id,
-        maxRounds: opts.rounds,
         config,
       });
-
-      closeDb();
     });
   });
 
@@ -127,12 +115,10 @@ program
 program
   .command("resume [id]")
   .description("Resume a session by ID, or pick interactively")
-  .option("--rounds <n>", "Number of rounds", parseInt)
-  .action(async (id: string | undefined, opts) => {
+  .action(async (id: string | undefined) => {
     const config = loadConfig();
 
     if (!id) {
-      // Interactive picker
       const sessions = listSessions(20);
       if (sessions.length === 0) {
         console.log(chalk.red(" No sessions found."));
@@ -173,25 +159,21 @@ program
 
         rl2.question(" > ", async (prompt) => {
           rl2.close();
-          if (!prompt.trim()) {
+          if (!prompt.trim() || prompt.trim() === "/exit") {
             closeDb();
             return;
           }
 
-          await orchestrate({
+          await orchestrateInteractive({
             prompt: prompt.trim(),
             sessionId: session.id,
-            maxRounds: opts.rounds,
             config,
           });
-
-          closeDb();
         });
       });
       return;
     }
 
-    // Resume by ID or prefix
     const session = getSession(id) || getSessionByPrefix(id);
     if (!session) {
       console.log(chalk.red(` Session not found: ${id}`));
@@ -208,19 +190,16 @@ program
 
     rl.question(" > ", async (input) => {
       rl.close();
-      if (!input.trim()) {
+      if (!input.trim() || input.trim() === "/exit") {
         closeDb();
         return;
       }
 
-      await orchestrate({
+      await orchestrateInteractive({
         prompt: input.trim(),
         sessionId: session.id,
-        maxRounds: opts.rounds,
         config,
       });
-
-      closeDb();
     });
   });
 
@@ -264,13 +243,10 @@ configCmd
     const config = loadConfig();
     console.log(chalk.bold("\n Configuration:\n"));
     console.log(
-      chalk.dim(" general.max_rounds = ") + chalk.white(config.general.max_rounds)
+      chalk.dim(" claude.model = ") + chalk.white(config.claude.model)
     );
     console.log(
-      chalk.dim(" claude.model       = ") + chalk.white(config.claude.model)
-    );
-    console.log(
-      chalk.dim(" codex.model        = ") + chalk.white(config.codex.model)
+      chalk.dim(" codex.model  = ") + chalk.white(config.codex.model)
     );
     console.log();
   });
@@ -293,15 +269,7 @@ function printTranscript(sessionId: string): void {
   const messages = getMessages(sessionId);
   renderHeader(sessionId);
 
-  let lastRound = -1;
   for (const msg of messages) {
-    if (msg.round !== lastRound) {
-      if (msg.role !== "user") {
-        renderRoundHeader(msg.round, 0);
-      }
-      lastRound = msg.round;
-    }
-
     if (msg.role === "user") {
       renderUserPrompt(msg.content);
     } else if (msg.role === "claude" || msg.role === "codex") {
