@@ -34,6 +34,26 @@ program
     await instance.waitUntilExit();
   });
 
+// Discuss - auto-loop until consensus
+program
+  .command("discuss")
+  .description("Have Claude and Codex discuss a topic until they reach consensus")
+  .argument("<prompt...>", "Topic to discuss")
+  .action(async (promptParts: string[]) => {
+    const config = loadConfig();
+    const prompt = promptParts.join(" ");
+
+    const instance = startApp({
+      initialPrompt: prompt,
+      claudeModel: config.claude.model,
+      codexModel: config.codex.model,
+      config,
+      discuss: true,
+    });
+
+    await instance.waitUntilExit();
+  });
+
 // Continue most recent session
 program
   .command("continue")

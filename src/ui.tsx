@@ -14,6 +14,9 @@ import { closeDb } from "./db/index.js";
 import {
   collaborationPrompt,
   discussionPrompt,
+  debatePrompt,
+  debateRoundPrompt,
+  CONSENSUS_MARKER,
   formatConversationHistory,
 } from "./prompts.js";
 import type { WonderTwinsConfig } from "./config.js";
@@ -36,9 +39,32 @@ interface AppProps {
   codexModel: string;
   config: WonderTwinsConfig;
   showTranscript?: Message[];
+  discuss?: boolean;
+  maxDiscussionRounds?: number;
 }
 
 type AppState = "input" | "running" | "done";
+type Target = "both" | "claude" | "codex";
+
+interface ParsedInput {
+  target: Target;
+  prompt: string;
+  discuss: boolean;
+}
+
+function parseInput(input: string): ParsedInput {
+  const lower = input.toLowerCase();
+  if (lower.startsWith("discuss ")) {
+    return { target: "both", prompt: input.slice(8).trim(), discuss: true };
+  }
+  if (lower.startsWith("claude ") || lower.startsWith("claude, ")) {
+    return { target: "claude", prompt: input.slice(input.indexOf(" ") + 1).trim(), discuss: false };
+  }
+  if (lower.startsWith("codex ") || lower.startsWith("codex, ")) {
+    return { target: "codex", prompt: input.slice(input.indexOf(" ") + 1).trim(), discuss: false };
+  }
+  return { target: "both", prompt: input, discuss: false };
+}
 
 // --- Components ---
 
@@ -119,6 +145,26 @@ function ThinkingIndicator({ agent }: { agent: AgentName }) {
   );
 }
 
+function DiscussionStatus({ round, maxRounds }: { round: number; maxRounds: number }) {
+  return (
+    <Box marginLeft={1} marginBottom={1}>
+      <Text color="yellow" bold>
+        Discussion round {round}/{maxRounds}
+      </Text>
+    </Box>
+  );
+}
+
+function ConsensusReached() {
+  return (
+    <Box marginLeft={1} marginBottom={1}>
+      <Text color="green" bold>
+        Consensus reached.
+      </Text>
+    </Box>
+  );
+}
+
 function PromptInput({
   onSubmit,
 }: {
@@ -153,12 +199,16 @@ function PromptInput({
 
 // --- Main App ---
 
+const MAX_DISCUSSION_ROUNDS = 10;
+
 function App({
   initialPrompt,
   sessionId: existingSessionId,
   claudeModel,
   codexModel,
   showTranscript,
+  discuss: initialDiscuss,
+  maxDiscussionRounds = MAX_DISCUSSION_ROUNDS,
 }: AppProps) {
   const { exit } = useApp();
   const [sessionId] = useState(() => existingSessionId ?? nanoid(12));
@@ -166,7 +216,9 @@ function App({
   const [state, setState] = useState<AppState>(
     initialPrompt ? "running" : "input"
   );
-  const [isThinking, setIsThinking] = useState(false);
+  const [thinkingAgents, setThinkingAgents] = useState<AgentName[]>([]);
+  const [discussionRound, setDiscussionRound] = useState(0);
+  const [consensusReached, setConsensusReached] = useState(false);
   const [roundNum, setRoundNum] = useState(() => {
     if (showTranscript && showTranscript.length > 0) {
       return Math.max(...showTranscript.map((m) => m.round)) + 1;
@@ -184,7 +236,11 @@ function App({
   // Handle initial prompt
   useEffect(() => {
     if (initialPrompt && state === "running") {
-      runRound(initialPrompt);
+      if (initialDiscuss) {
+        runDiscussion(initialPrompt);
+      } else {
+        runRound(initialPrompt);
+      }
     }
   }, []);
 
@@ -196,154 +252,218 @@ function App({
     }
   });
 
-  const runRound = async (prompt: string) => {
+  // Run both agents, save results, return new messages
+  const runAgents = async (
+    currentMessages: Message[],
+    round: number,
+    target: Target,
+    promptOverride?: string,
+    isDebate = false,
+  ): Promise<Message[]> => {
+    const runCl = target === "both" || target === "claude";
+    const runCx = target === "both" || target === "codex";
+
+    const activeAgents: AgentName[] = [];
+    if (runCl) activeAgents.push("claude");
+    if (runCx) activeAgents.push("codex");
+    setThinkingAgents(activeAgents);
+
+    const history = formatConversationHistory(
+      currentMessages.map((m) => ({
+        role: m.role,
+        agent:
+          m.role === "claude" || m.role === "codex"
+            ? (m.role as AgentName)
+            : undefined,
+        content: m.content,
+      }))
+    );
+
+    const cwd = process.cwd();
+    const isFirstRound = round === 0 && !existingSessionId;
+
+    const agentPrompt = (agent: AgentName) => {
+      if (promptOverride) return promptOverride;
+      if (isFirstRound && target === "both") {
+        return currentMessages[currentMessages.length - 1]?.content || "";
+      }
+      return "Provide your response for this round.";
+    };
+
+    const agentSystemPrompt = (agent: AgentName) => {
+      if (isDebate) {
+        if (isFirstRound) return debatePrompt(agent);
+        return debateRoundPrompt(agent, history);
+      }
+      if (isFirstRound && target === "both") return collaborationPrompt(agent);
+      return discussionPrompt(agent, history);
+    };
+
+    const results: Array<{ agent: AgentName; result: PromiseSettledResult<Awaited<ReturnType<typeof runClaude>>> }> = [];
+    const promises: Array<Promise<void>> = [];
+
+    if (runCl) {
+      promises.push(
+        runClaude({
+          prompt: agentPrompt("claude"),
+          systemPrompt: agentSystemPrompt("claude"),
+          model: claudeModel,
+          cwd,
+        }).then(
+          (value) => { results.push({ agent: "claude", result: { status: "fulfilled", value } }); },
+          (reason) => { results.push({ agent: "claude", result: { status: "rejected", reason } }); }
+        )
+      );
+    }
+    if (runCx) {
+      promises.push(
+        runCodex({
+          prompt: agentPrompt("codex"),
+          systemPrompt: agentSystemPrompt("codex"),
+          model: codexModel,
+          cwd,
+        }).then(
+          (value) => { results.push({ agent: "codex", result: { status: "fulfilled", value } }); },
+          (reason) => { results.push({ agent: "codex", result: { status: "rejected", reason } }); }
+        )
+      );
+    }
+
+    await Promise.all(promises);
+    setThinkingAgents([]);
+
+    const newMessages: Message[] = [];
+
+    for (const { agent, result } of results) {
+      if (result.status === "fulfilled") {
+        const resp = result.value;
+        const msg: Message = {
+          role: agent,
+          content: resp.error || resp.text,
+          round,
+          error: !!resp.error,
+        };
+        newMessages.push(msg);
+        insertMessage({
+          sessionId,
+          role: agent,
+          content: resp.error || resp.text,
+          round,
+          durationMs: resp.durationMs,
+        });
+      } else {
+        const errorMsg = result.reason?.message || "Failed to run";
+        const msg: Message = {
+          role: agent,
+          content: errorMsg,
+          round,
+          error: true,
+        };
+        newMessages.push(msg);
+        insertMessage({
+          sessionId,
+          role: agent,
+          content: `[Error: ${errorMsg}]`,
+          round,
+        });
+      }
+    }
+
+    return newMessages;
+  };
+
+  const runRound = async (rawInput: string) => {
+    const { target, prompt, discuss } = parseInput(rawInput);
+
+    if (discuss) {
+      return runDiscussion(prompt);
+    }
+
     const currentRound = roundNum;
 
     // Add user message
     const userMsg: Message = {
       role: "user",
-      content: prompt,
+      content: rawInput,
       round: currentRound,
     };
     setMessages((prev) => [...prev, userMsg]);
     insertMessage({
       sessionId,
       role: "user",
-      content: prompt,
+      content: rawInput,
       round: currentRound,
     });
 
-    setIsThinking(true);
-
-    // Build prompts for agents
     const allMessages = [...messages, userMsg];
-    let claudePrompt: string;
-    let codexPrompt: string;
-    let claudeSystemPrompt: string;
-    let codexSystemPrompt: string;
-
-    if (currentRound === 0 && !existingSessionId) {
-      claudePrompt = prompt;
-      codexPrompt = prompt;
-      claudeSystemPrompt = collaborationPrompt("claude");
-      codexSystemPrompt = collaborationPrompt("codex");
-    } else {
-      const history = formatConversationHistory(
-        allMessages.map((m) => ({
-          role: m.role,
-          agent:
-            m.role === "claude" || m.role === "codex"
-              ? (m.role as AgentName)
-              : undefined,
-          content: m.content,
-        }))
-      );
-      claudeSystemPrompt = discussionPrompt("claude", history);
-      codexSystemPrompt = discussionPrompt("codex", history);
-      claudePrompt = "Provide your response for this round.";
-      codexPrompt = "Provide your response for this round.";
-    }
-
-    const cwd = process.cwd();
-
-    // Run both agents in parallel
-    const [claudeResult, codexResult] = await Promise.allSettled([
-      runClaude({
-        prompt: claudePrompt,
-        systemPrompt: claudeSystemPrompt,
-        model: claudeModel,
-        cwd,
-      }),
-      runCodex({
-        prompt: codexPrompt,
-        systemPrompt: codexSystemPrompt,
-        model: codexModel,
-        cwd,
-      }),
-    ]);
-
-    setIsThinking(false);
-
-    const newMessages: Message[] = [];
-
-    // Process Claude
-    if (claudeResult.status === "fulfilled") {
-      const resp = claudeResult.value;
-      const msg: Message = {
-        role: "claude",
-        content: resp.error || resp.text,
-        round: currentRound,
-        error: !!resp.error,
-      };
-      newMessages.push(msg);
-      insertMessage({
-        sessionId,
-        role: "claude",
-        content: resp.error || resp.text,
-        round: currentRound,
-        durationMs: resp.durationMs,
-      });
-    } else {
-      const errorMsg = claudeResult.reason?.message || "Failed to run";
-      const msg: Message = {
-        role: "claude",
-        content: errorMsg,
-        round: currentRound,
-        error: true,
-      };
-      newMessages.push(msg);
-      insertMessage({
-        sessionId,
-        role: "claude",
-        content: `[Error: ${errorMsg}]`,
-        round: currentRound,
-      });
-    }
-
-    // Process Codex
-    if (codexResult.status === "fulfilled") {
-      const resp = codexResult.value;
-      const msg: Message = {
-        role: "codex",
-        content: resp.error || resp.text,
-        round: currentRound,
-        error: !!resp.error,
-      };
-      newMessages.push(msg);
-      insertMessage({
-        sessionId,
-        role: "codex",
-        content: resp.error || resp.text,
-        round: currentRound,
-        durationMs: resp.durationMs,
-      });
-    } else {
-      const errorMsg = codexResult.reason?.message || "Failed to run";
-      const msg: Message = {
-        role: "codex",
-        content: errorMsg,
-        round: currentRound,
-        error: true,
-      };
-      newMessages.push(msg);
-      insertMessage({
-        sessionId,
-        role: "codex",
-        content: `[Error: ${errorMsg}]`,
-        round: currentRound,
-      });
-    }
+    const newMessages = await runAgents(allMessages, currentRound, target);
 
     setMessages((prev) => [...prev, ...newMessages]);
     setRoundNum(currentRound + 1);
 
-    // Set title on first round
     if (currentRound === 0 && !existingSessionId) {
-      const title =
-        prompt.length > 60 ? prompt.slice(0, 57) + "..." : prompt;
+      const title = prompt.length > 60 ? prompt.slice(0, 57) + "..." : prompt;
       updateSessionTitle(sessionId, title);
     }
 
+    touchSession(sessionId);
+    setState("input");
+  };
+
+  const runDiscussion = async (prompt: string) => {
+    setConsensusReached(false);
+    let currentRound = roundNum;
+
+    // Add user message
+    const userMsg: Message = {
+      role: "user",
+      content: `discuss ${prompt}`,
+      round: currentRound,
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    insertMessage({
+      sessionId,
+      role: "user",
+      content: `discuss ${prompt}`,
+      round: currentRound,
+    });
+
+    let allMessages = [...messages, userMsg];
+
+    if (currentRound === 0 && !existingSessionId) {
+      const title = prompt.length > 60 ? prompt.slice(0, 57) + "..." : prompt;
+      updateSessionTitle(sessionId, title);
+    }
+
+    for (let disc = 1; disc <= maxDiscussionRounds; disc++) {
+      setDiscussionRound(disc);
+
+      const newMessages = await runAgents(
+        allMessages,
+        currentRound,
+        "both",
+        disc === 1 ? prompt : "Provide your response for this round.",
+        true,
+      );
+
+      setMessages((prev) => [...prev, ...newMessages]);
+      allMessages = [...allMessages, ...newMessages];
+      currentRound++;
+
+      // Check for consensus — both agents must include the marker
+      const claudeMsg = newMessages.find((m) => m.role === "claude" && !m.error);
+      const codexMsg = newMessages.find((m) => m.role === "codex" && !m.error);
+      const claudeConsensus = claudeMsg?.content.includes(CONSENSUS_MARKER) ?? false;
+      const codexConsensus = codexMsg?.content.includes(CONSENSUS_MARKER) ?? false;
+
+      if (claudeConsensus && codexConsensus) {
+        setConsensusReached(true);
+        break;
+      }
+    }
+
+    setRoundNum(currentRound);
+    setDiscussionRound(0);
     touchSession(sessionId);
     setState("input");
   };
@@ -354,6 +474,7 @@ function App({
       exit();
       return;
     }
+    setConsensusReached(false);
     setState("running");
     runRound(value);
   };
@@ -379,12 +500,19 @@ function App({
         return null;
       })}
 
-      {isThinking && (
+      {discussionRound > 0 && thinkingAgents.length > 0 && (
+        <DiscussionStatus round={discussionRound} maxRounds={maxDiscussionRounds} />
+      )}
+
+      {thinkingAgents.length > 0 && (
         <Box flexDirection="column" marginBottom={1}>
-          <ThinkingIndicator agent="claude" />
-          <ThinkingIndicator agent="codex" />
+          {thinkingAgents.map((agent) => (
+            <ThinkingIndicator key={agent} agent={agent} />
+          ))}
         </Box>
       )}
+
+      {consensusReached && <ConsensusReached />}
 
       {state === "input" && <PromptInput onSubmit={handleSubmit} />}
     </Box>

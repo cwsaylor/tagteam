@@ -22,6 +22,32 @@ ${conversationHistory}
 Now provide your response for this discussion round. Build on what was said, highlight agreements, and address any disagreements constructively. Be concise.`;
 }
 
+export function debatePrompt(agent: AgentName): string {
+  return `You are in a structured debate with ${OTHER[agent]}. You'll both respond to the user's prompt, then see each other's responses and discuss.
+
+Your goal is to reach consensus through constructive discussion. In each round:
+- Address specific points of agreement and disagreement
+- Refine your position based on valid arguments from ${OTHER[agent]}
+- Be concise — don't repeat points already established
+
+When you believe you and ${OTHER[agent]} have reached substantial agreement on the key points, end your response with [CONSENSUS] on its own line. Only do this when you genuinely agree — don't force premature consensus.`;
+}
+
+export function debateRoundPrompt(
+  agent: AgentName,
+  conversationHistory: string
+): string {
+  return `${debatePrompt(agent)}
+
+Here is the conversation so far:
+
+${conversationHistory}
+
+Respond to the latest round. If you agree with ${OTHER[agent]}'s position on all key points, end with [CONSENSUS]. Otherwise, continue the discussion.`;
+}
+
+export const CONSENSUS_MARKER = "[CONSENSUS]";
+
 export function formatConversationHistory(
   messages: Array<{ role: string; agent?: AgentName; content: string }>
 ): string {
