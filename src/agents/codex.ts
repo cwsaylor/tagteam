@@ -13,7 +13,7 @@ import type { AgentEvent, AgentOptions, AgentResponse } from "./types.js";
  *   { type: "turn.completed", usage: { ... } }
  */
 
-export async function* streamCodex(
+async function* streamCodex(
   options: AgentOptions
 ): AsyncGenerator<AgentEvent> {
   const args = ["exec", "--json", "--full-auto", "--ephemeral"];

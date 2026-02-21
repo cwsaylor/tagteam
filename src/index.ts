@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { loadConfig, setConfigValue } from "./config.js";
-import { orchestrate, orchestrateInteractive } from "./orchestrator.js";
+import { startApp, showTranscript, showSessionList } from "./ui.js";
 import {
   getMostRecentSession,
   getSession,
@@ -10,13 +10,6 @@ import {
 } from "./db/sessions.js";
 import { getMessages } from "./db/messages.js";
 import { closeDb } from "./db/index.js";
-import {
-  renderHeader,
-  renderSessionList,
-  renderAgentResponse,
-  renderUserPrompt,
-  renderFooter,
-} from "./ui.js";
 
 const program = new Command();
 
@@ -29,45 +22,16 @@ program
   .argument("[prompt...]", "Prompt to send to both agents")
   .action(async (promptParts: string[], opts) => {
     const config = loadConfig();
-    const prompt = promptParts.join(" ");
+    const prompt = promptParts.join(" ") || undefined;
 
-    if (!prompt) {
-      // Interactive mode: ask for first prompt, then continue in session
-      const readline = await import("node:readline");
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-      });
-
-      console.log(
-        chalk.dim(
-          " Wonder Twins interactive mode. Type your prompt, or /exit to quit."
-        )
-      );
-
-      rl.question(" > ", async (input) => {
-        rl.close();
-        const trimmed = input.trim();
-        if (!trimmed || trimmed === "/exit") {
-          return;
-        }
-
-        await orchestrateInteractive({
-          prompt: trimmed,
-          claudeModel: opts.claudeModel,
-          codexModel: opts.codexModel,
-          config,
-        });
-      });
-      return;
-    }
-
-    await orchestrateInteractive({
-      prompt,
-      claudeModel: opts.claudeModel,
-      codexModel: opts.codexModel,
+    const instance = startApp({
+      initialPrompt: prompt,
+      claudeModel: opts.claudeModel ?? config.claude.model,
+      codexModel: opts.codexModel ?? config.codex.model,
       config,
     });
+
+    await instance.waitUntilExit();
   });
 
 // Continue most recent session
@@ -83,32 +47,22 @@ program
       process.exit(1);
     }
 
-    console.log(
-      chalk.dim(` Resuming session ${chalk.cyan(session.id.slice(0, 7))}...`)
-    );
+    const dbMessages = getMessages(session.id);
+    const transcript = dbMessages.map((m) => ({
+      role: m.role as "user" | "claude" | "codex" | "system",
+      content: m.content,
+      round: m.round,
+    }));
 
-    printTranscript(session.id);
-
-    const readline = await import("node:readline");
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
+    const instance = startApp({
+      sessionId: session.id,
+      claudeModel: config.claude.model,
+      codexModel: config.codex.model,
+      config,
+      showTranscript: transcript,
     });
 
-    rl.question(" > ", async (input) => {
-      rl.close();
-      const trimmed = input.trim();
-      if (!trimmed || trimmed === "/exit") {
-        closeDb();
-        return;
-      }
-
-      await orchestrateInteractive({
-        prompt: trimmed,
-        sessionId: session.id,
-        config,
-      });
-    });
+    await instance.waitUntilExit();
   });
 
 // Resume a specific session
@@ -140,38 +94,37 @@ program
         output: process.stdout,
       });
 
-      rl.question(" Select session number: ", async (input) => {
-        rl.close();
-        const num = parseInt(input.trim(), 10);
-        if (isNaN(num) || num < 1 || num > sessions.length) {
-          console.log(chalk.red(" Invalid selection."));
-          closeDb();
-          return;
-        }
-
-        const session = sessions[num - 1];
-        printTranscript(session.id);
-
-        const rl2 = (await import("node:readline")).createInterface({
-          input: process.stdin,
-          output: process.stdout,
-        });
-
-        rl2.question(" > ", async (prompt) => {
-          rl2.close();
-          if (!prompt.trim() || prompt.trim() === "/exit") {
+      return new Promise<void>((resolve) => {
+        rl.question(" Select session number: ", async (input) => {
+          rl.close();
+          const num = parseInt(input.trim(), 10);
+          if (isNaN(num) || num < 1 || num > sessions.length) {
+            console.log(chalk.red(" Invalid selection."));
             closeDb();
+            resolve();
             return;
           }
 
-          await orchestrateInteractive({
-            prompt: prompt.trim(),
+          const session = sessions[num - 1];
+          const dbMessages = getMessages(session.id);
+          const transcript = dbMessages.map((m) => ({
+            role: m.role as "user" | "claude" | "codex" | "system",
+            content: m.content,
+            round: m.round,
+          }));
+
+          const instance = startApp({
             sessionId: session.id,
+            claudeModel: config.claude.model,
+            codexModel: config.codex.model,
             config,
+            showTranscript: transcript,
           });
+
+          await instance.waitUntilExit();
+          resolve();
         });
       });
-      return;
     }
 
     const session = getSession(id) || getSessionByPrefix(id);
@@ -180,27 +133,22 @@ program
       process.exit(1);
     }
 
-    printTranscript(session.id);
+    const dbMessages = getMessages(session.id);
+    const transcript = dbMessages.map((m) => ({
+      role: m.role as "user" | "claude" | "codex" | "system",
+      content: m.content,
+      round: m.round,
+    }));
 
-    const readline = await import("node:readline");
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
+    const instance = startApp({
+      sessionId: session.id,
+      claudeModel: config.claude.model,
+      codexModel: config.codex.model,
+      config,
+      showTranscript: transcript,
     });
 
-    rl.question(" > ", async (input) => {
-      rl.close();
-      if (!input.trim() || input.trim() === "/exit") {
-        closeDb();
-        return;
-      }
-
-      await orchestrateInteractive({
-        prompt: input.trim(),
-        sessionId: session.id,
-        config,
-      });
-    });
+    await instance.waitUntilExit();
   });
 
 // History
@@ -211,7 +159,7 @@ program
   .action((opts) => {
     const sessions = listSessions(opts.limit);
     console.log(chalk.bold("\n Recent sessions:\n"));
-    renderSessionList(sessions);
+    showSessionList(sessions);
     console.log();
     closeDb();
   });
@@ -227,7 +175,7 @@ program
       process.exit(1);
     }
 
-    printTranscript(session.id);
+    showTranscript(session.id);
     closeDb();
   });
 
@@ -263,28 +211,5 @@ configCmd
       process.exit(1);
     }
   });
-
-// Helper to print a session transcript
-function printTranscript(sessionId: string): void {
-  const messages = getMessages(sessionId);
-  renderHeader(sessionId);
-
-  for (const msg of messages) {
-    if (msg.role === "user") {
-      renderUserPrompt(msg.content);
-    } else if (msg.role === "claude" || msg.role === "codex") {
-      renderAgentResponse(msg.role, msg.content);
-    }
-  }
-
-  renderFooter();
-}
-
-// Handle Ctrl+C gracefully
-process.on("SIGINT", () => {
-  console.log(chalk.dim("\n Interrupted. Session state saved."));
-  closeDb();
-  process.exit(0);
-});
 
 program.parseAsync();

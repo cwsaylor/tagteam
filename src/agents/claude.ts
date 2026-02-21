@@ -12,7 +12,7 @@ import type { AgentEvent, AgentOptions, AgentResponse } from "./types.js";
  *   { type: "result", subtype: "success", result: "final text", ... }
  */
 
-export async function* streamClaude(
+async function* streamClaude(
   options: AgentOptions
 ): AsyncGenerator<AgentEvent> {
   const args = [

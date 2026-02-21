@@ -58,13 +58,6 @@ export function updateSessionTitle(id: string, title: string): void {
   ).run(title, id);
 }
 
-export function updateSessionStatus(id: string, status: string): void {
-  const db = getDb();
-  db.prepare(
-    `UPDATE sessions SET status = ?, updated_at = datetime('now') WHERE id = ?`
-  ).run(status, id);
-}
-
 export function touchSession(id: string): void {
   const db = getDb();
   db.prepare(`UPDATE sessions SET updated_at = datetime('now') WHERE id = ?`).run(

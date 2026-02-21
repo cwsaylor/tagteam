@@ -45,12 +45,3 @@ export function getMessages(sessionId: string): Message[] {
     .prepare(`SELECT * FROM messages WHERE session_id = ? ORDER BY id`)
     .all(sessionId) as Message[];
 }
-
-export function getLastMessage(sessionId: string): Message | undefined {
-  const db = getDb();
-  return db
-    .prepare(
-      `SELECT * FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT 1`
-    )
-    .get(sessionId) as Message | undefined;
-}
