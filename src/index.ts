@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { execSync } from "node:child_process";
 import chalk from "chalk";
 import { loadConfig, setConfigValue } from "./config.js";
 import { startApp, showTranscript, showTranscriptMarkdown, showSessionList } from "./ui.js";
@@ -15,6 +16,26 @@ import { closeDb } from "./db/index.js";
 process.on("SIGTERM", () => { closeDb(); process.exit(0); });
 process.on("SIGINT", () => { closeDb(); process.exit(0); });
 
+function checkCli(name: string, installUrl: string): boolean {
+  try {
+    execSync(`${name} --version`, { stdio: "ignore" });
+    return true;
+  } catch {
+    console.error(
+      chalk.red(`"${name}" not found. Install it from: ${installUrl}`)
+    );
+    return false;
+  }
+}
+
+function preflight(): void {
+  const hasClaude = checkCli("claude", "https://docs.anthropic.com/en/docs/claude-code");
+  const hasCodex = checkCli("codex", "https://github.com/openai/codex");
+  if (!hasClaude || !hasCodex) {
+    process.exit(1);
+  }
+}
+
 const program = new Command();
 
 program
@@ -25,6 +46,7 @@ program
   .option("--codex-model <model>", "Codex model to use")
   .argument("[prompt...]", "Prompt to send to both agents")
   .action(async (promptParts: string[], opts) => {
+    preflight();
     const config = loadConfig();
     const prompt = promptParts.join(" ") || undefined;
 
@@ -44,6 +66,7 @@ program
   .description("Have Claude and Codex discuss a topic until they reach consensus")
   .argument("<prompt...>", "Topic to discuss")
   .action(async (promptParts: string[]) => {
+    preflight();
     const config = loadConfig();
     const prompt = promptParts.join(" ");
 
@@ -63,6 +86,7 @@ program
   .command("continue")
   .description("Resume the most recent session")
   .action(async () => {
+    preflight();
     const config = loadConfig();
     const session = getMostRecentSession();
 
@@ -94,6 +118,7 @@ program
   .command("resume [id]")
   .description("Resume a session by ID, or pick interactively")
   .action(async (id: string | undefined) => {
+    preflight();
     const config = loadConfig();
 
     if (!id) {

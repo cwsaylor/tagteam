@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Graceful shutdown signal handlers (SIGTERM/SIGINT) to ensure database cleanup
 - Clipboard error handling with actionable messages when xclip/xsel is missing on Linux
 - Platform notes section in README for Windows, Linux, and macOS
+- Startup detection of `claude` and `codex` CLIs with install links when missing
 
 ## [0.1.0] - 2025-02-07
 
