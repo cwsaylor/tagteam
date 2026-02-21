@@ -213,7 +213,7 @@ function App({
   maxDiscussionRounds = MAX_DISCUSSION_ROUNDS,
 }: AppProps) {
   const { exit } = useApp();
-  const [sessionId] = useState(() => existingSessionId ?? nanoid(12));
+  const [sessionId, setSessionId] = useState(() => existingSessionId ?? nanoid(12));
   const [messages, setMessages] = useState<Message[]>(showTranscript ?? []);
   const [state, setState] = useState<AppState>(
     initialPrompt ? "running" : "input"
@@ -477,6 +477,18 @@ function App({
     if (value === "/exit") {
       closeDb();
       exit();
+      return;
+    }
+
+    if (value === "/new") {
+      const newId = nanoid(12);
+      createSession(newId, process.cwd());
+      setSessionId(newId);
+      setMessages([]);
+      setRoundNum(0);
+      setConsensusReached(false);
+      setDiscussionRound(0);
+      setStatusMessage("Started new session.");
       return;
     }
 
