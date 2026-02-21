@@ -42,7 +42,6 @@ interface AppProps {
   config: WonderTwinsConfig;
   showTranscript?: Message[];
   discuss?: boolean;
-  maxDiscussionRounds?: number;
 }
 
 type AppState = "input" | "running" | "done";
@@ -201,16 +200,14 @@ function PromptInput({
 
 // --- Main App ---
 
-const MAX_DISCUSSION_ROUNDS = 10;
-
 function App({
   initialPrompt,
   sessionId: existingSessionId,
   claudeModel,
   codexModel,
+  config,
   showTranscript,
   discuss: initialDiscuss,
-  maxDiscussionRounds = MAX_DISCUSSION_ROUNDS,
 }: AppProps) {
   const { exit } = useApp();
   const [sessionId, setSessionId] = useState(() => existingSessionId ?? nanoid(12));
@@ -438,7 +435,7 @@ function App({
       updateSessionTitle(sessionId, title);
     }
 
-    for (let disc = 1; disc <= maxDiscussionRounds; disc++) {
+    for (let disc = 1; disc <= config.discussion.max_rounds; disc++) {
       setDiscussionRound(disc);
 
       const newMessages = await runAgents(
@@ -542,7 +539,7 @@ function App({
       })}
 
       {discussionRound > 0 && thinkingAgents.length > 0 && (
-        <DiscussionStatus round={discussionRound} maxRounds={maxDiscussionRounds} />
+        <DiscussionStatus round={discussionRound} maxRounds={config.discussion.max_rounds} />
       )}
 
       {thinkingAgents.length > 0 && (

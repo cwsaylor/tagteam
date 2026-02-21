@@ -10,6 +10,9 @@ export interface WonderTwinsConfig {
   codex: {
     model: string;
   };
+  discussion: {
+    max_rounds: number;
+  };
 }
 
 const DEFAULT_CONFIG: WonderTwinsConfig = {
@@ -18,6 +21,9 @@ const DEFAULT_CONFIG: WonderTwinsConfig = {
   },
   codex: {
     model: "gpt-5.3-codex",
+  },
+  discussion: {
+    max_rounds: 10,
   },
 };
 
@@ -49,6 +55,7 @@ export function loadConfig(): WonderTwinsConfig {
     return {
       claude: { ...DEFAULT_CONFIG.claude, ...parsed.claude },
       codex: { ...DEFAULT_CONFIG.codex, ...parsed.codex },
+      discussion: { ...DEFAULT_CONFIG.discussion, ...parsed.discussion },
     };
   } catch {
     return { ...DEFAULT_CONFIG };
@@ -76,6 +83,9 @@ export function setConfigValue(
       case "codex_model":
         config.codex.model = value;
         break;
+      case "discussion_max_rounds":
+        config.discussion.max_rounds = Number(value);
+        break;
       default:
         throw new Error(`Unknown config key: ${key}`);
     }
@@ -85,6 +95,8 @@ export function setConfigValue(
       config.claude.model = value;
     } else if (section === "codex" && field === "model") {
       config.codex.model = value;
+    } else if (section === "discussion" && field === "max_rounds") {
+      config.discussion.max_rounds = Number(value);
     } else {
       throw new Error(`Unknown config key: ${key}`);
     }

@@ -221,6 +221,9 @@ configCmd
     console.log(
       chalk.dim(" codex.model  = ") + chalk.white(config.codex.model)
     );
+    console.log(
+      chalk.dim(" discussion.max_rounds = ") + chalk.white(String(config.discussion.max_rounds))
+    );
     console.log();
   });
 
