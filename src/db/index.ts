@@ -5,7 +5,7 @@ import { getConfigDir, ensureConfigDir } from "../config.js";
 let db: Database.Database | null = null;
 
 export function getDbPath(): string {
-  return join(getConfigDir(), "wondertwins.db");
+  return join(getConfigDir(), "tagteam.db");
 }
 
 export function getDb(): Database.Database {

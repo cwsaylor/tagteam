@@ -1,20 +1,36 @@
 {
-  "name": "wondertwins",
+  "name": "tagteam",
   "version": "0.1.0",
   "description": "Orchestrate Claude and Codex in collaborative AI sessions",
   "type": "module",
   "bin": {
-    "wt": "./dist/index.js"
+    "tagteam": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsx src/index.ts",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
   },
+  "keywords": [
+    "ai",
+    "claude",
+    "codex",
+    "agents",
+    "orchestration"
+  ],
   "engines": {
     "node": ">=22"
   },
+  "author": "Christopher Saylor",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cwsaylor/tagteam.git"
+  },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
     "chalk": "^5.4.1",

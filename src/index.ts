@@ -15,8 +15,8 @@ import { closeDb } from "./db/index.js";
 const program = new Command();
 
 program
-  .name("wt")
-  .description("Wonder Twins - Orchestrate Claude and Codex collaboratively")
+  .name("tagteam")
+  .description("Tag Team - Orchestrate Claude and Codex collaboratively")
   .version("0.1.0")
   .option("--claude-model <model>", "Claude model to use")
   .option("--codex-model <model>", "Codex model to use")

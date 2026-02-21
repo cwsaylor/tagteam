@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { parse, stringify } from "smol-toml";
 
-export interface WonderTwinsConfig {
+export interface TagTeamConfig {
   claude: {
     model: string;
   };
@@ -15,7 +15,7 @@ export interface WonderTwinsConfig {
   };
 }
 
-const DEFAULT_CONFIG: WonderTwinsConfig = {
+const DEFAULT_CONFIG: TagTeamConfig = {
   claude: {
     model: "sonnet",
   },
@@ -28,7 +28,7 @@ const DEFAULT_CONFIG: WonderTwinsConfig = {
 };
 
 export function getConfigDir(): string {
-  return join(homedir(), ".wondertwins");
+  return join(homedir(), ".tagteam");
 }
 
 export function getConfigPath(): string {
@@ -42,7 +42,7 @@ export function ensureConfigDir(): void {
   }
 }
 
-export function loadConfig(): WonderTwinsConfig {
+export function loadConfig(): TagTeamConfig {
   const configPath = getConfigPath();
 
   if (!existsSync(configPath)) {
@@ -62,7 +62,7 @@ export function loadConfig(): WonderTwinsConfig {
   }
 }
 
-export function saveConfig(config: WonderTwinsConfig): void {
+export function saveConfig(config: TagTeamConfig): void {
   ensureConfigDir();
   const configPath = getConfigPath();
   writeFileSync(configPath, stringify(config as any), "utf-8");
@@ -71,7 +71,7 @@ export function saveConfig(config: WonderTwinsConfig): void {
 export function setConfigValue(
   key: string,
   value: string
-): WonderTwinsConfig {
+): TagTeamConfig {
   const config = loadConfig();
   const parts = key.split(".");
 

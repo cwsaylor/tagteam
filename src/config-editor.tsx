@@ -2,12 +2,12 @@ import React, { useState } from "react";
 import { render, Box, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 import { loadConfig, setConfigValue } from "./config.js";
-import type { WonderTwinsConfig } from "./config.js";
+import type { TagTeamConfig } from "./config.js";
 
 interface ConfigField {
   key: string;
   label: string;
-  get: (c: WonderTwinsConfig) => string;
+  get: (c: TagTeamConfig) => string;
   type: "string" | "number";
 }
 
@@ -152,7 +152,7 @@ export function InlineConfigEditor({ isActive, onClose }: InlineConfigEditorProp
   );
 }
 
-// Standalone entrypoint for `wt config edit`
+// Standalone entrypoint for `tagteam config edit`
 function StandaloneConfigEditor() {
   const { exit } = useApp();
   return <InlineConfigEditor isActive={true} onClose={exit} />;

@@ -1,0 +1,101 @@
+# tagteam
+
+Orchestrate Claude and Codex in collaborative AI sessions. Send a prompt to both agents simultaneously, then let them build on each other's responses in multi-round discussions.
+
+## Install
+
+```bash
+npm install -g tagteam
+```
+
+Or run directly:
+
+```bash
+npx tagteam "your prompt here"
+```
+
+## Prerequisites
+
+- Node.js >= 22
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI installed and authenticated
+- [Codex](https://github.com/openai/codex) CLI installed and authenticated
+
+## Usage
+
+### Interactive mode
+
+```bash
+tagteam
+```
+
+Launches an interactive TUI where you can type prompts and see responses from both agents side by side.
+
+### One-shot prompt
+
+```bash
+tagteam "explain how this codebase handles authentication"
+```
+
+### Discussion mode
+
+Have Claude and Codex discuss a topic in rounds until they reach consensus:
+
+```bash
+tagteam discuss "what's the best approach for caching in this app"
+```
+
+### Session management
+
+```bash
+# Resume the most recent session
+tagteam continue
+
+# List recent sessions
+tagteam history
+
+# Resume a specific session by ID
+tagteam resume <id>
+
+# Show full transcript
+tagteam show <id>
+
+# Export transcript as markdown
+tagteam show <id> --markdown
+```
+
+### Configuration
+
+Configuration is stored in `~/.tagteam/config.toml`.
+
+```bash
+# Interactive config editor
+tagteam config
+
+# Show current config
+tagteam config show
+
+# Set a value
+tagteam config set claude.model sonnet
+tagteam config set codex.model gpt-5.3-codex
+tagteam config set discussion.max_rounds 10
+```
+
+### CLI options
+
+```bash
+tagteam --claude-model <model>   # Override Claude model
+tagteam --codex-model <model>    # Override Codex model
+```
+
+## Interactive commands
+
+While in a session, type these slash commands:
+
+- `/help` - List available commands
+- `/new` - Start a fresh session
+- `/config` - Open the config editor
+- `Escape` - Interrupt running agents
+
+## License
+
+MIT

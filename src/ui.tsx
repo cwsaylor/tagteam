@@ -21,7 +21,7 @@ import {
   CONSENSUS_MARKER,
   formatConversationHistory,
 } from "./prompts.js";
-import type { WonderTwinsConfig } from "./config.js";
+import type { TagTeamConfig } from "./config.js";
 import { InlineConfigEditor } from "./config-editor.js";
 
 marked.use(markedTerminal() as any);
@@ -40,7 +40,7 @@ interface AppProps {
   sessionId?: string;
   claudeModel: string;
   codexModel: string;
-  config: WonderTwinsConfig;
+  config: TagTeamConfig;
   showTranscript?: Message[];
   discuss?: boolean;
 }
@@ -115,7 +115,7 @@ function Header({ sessionId }: { sessionId: string }) {
   return (
     <Box marginBottom={1}>
       <Text dimColor>{"── "}</Text>
-      <Text bold>Wonder Twins</Text>
+      <Text bold>Tag Team</Text>
       <Text dimColor>{" ── session "}</Text>
       <Text color="cyan">{sessionId.slice(0, 7)}</Text>
       <Text dimColor>{" " + "─".repeat(35)}</Text>
