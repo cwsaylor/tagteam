@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { loadConfig, setConfigValue } from "./config.js";
-import { startApp, showTranscript, showSessionList } from "./ui.js";
+import { startApp, showTranscript, showTranscriptMarkdown, showSessionList } from "./ui.js";
 import {
   getMostRecentSession,
   getSession,
@@ -188,14 +188,19 @@ program
 program
   .command("show <id>")
   .description("Print full transcript for a session")
-  .action((id: string) => {
+  .option("-m, --markdown", "Output as GitHub-compatible markdown")
+  .action((id: string, opts: { markdown?: boolean }) => {
     const session = getSession(id) || getSessionByPrefix(id);
     if (!session) {
       console.log(chalk.red(` Session not found: ${id}`));
       process.exit(1);
     }
 
-    showTranscript(session.id);
+    if (opts.markdown) {
+      process.stdout.write(showTranscriptMarkdown(session.id));
+    } else {
+      showTranscript(session.id);
+    }
     closeDb();
   });
 

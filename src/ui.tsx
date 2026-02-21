@@ -8,6 +8,8 @@ import { nanoid } from "nanoid";
 import { runClaude } from "./agents/claude.js";
 import { runCodex } from "./agents/codex.js";
 import type { AgentName } from "./agents/types.js";
+import { formatAsMarkdown } from "./format.js";
+import { copyToClipboard } from "./clipboard.js";
 import { createSession, touchSession, updateSessionTitle } from "./db/sessions.js";
 import { insertMessage, getMessages } from "./db/messages.js";
 import { closeDb } from "./db/index.js";
@@ -219,6 +221,7 @@ function App({
   const [thinkingAgents, setThinkingAgents] = useState<AgentName[]>([]);
   const [discussionRound, setDiscussionRound] = useState(0);
   const [consensusReached, setConsensusReached] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [roundNum, setRoundNum] = useState(() => {
     if (showTranscript && showTranscript.length > 0) {
       return Math.max(...showTranscript.map((m) => m.round)) + 1;
@@ -469,11 +472,25 @@ function App({
   };
 
   const handleSubmit = (value: string) => {
+    setStatusMessage(null);
+
     if (value === "/exit") {
       closeDb();
       exit();
       return;
     }
+
+    if (value === "/copy") {
+      try {
+        const md = formatAsMarkdown(messages);
+        copyToClipboard(md);
+        setStatusMessage("Copied conversation to clipboard.");
+      } catch {
+        setStatusMessage("Failed to copy to clipboard.");
+      }
+      return;
+    }
+
     setConsensusReached(false);
     setState("running");
     runRound(value);
@@ -514,6 +531,12 @@ function App({
 
       {consensusReached && <ConsensusReached />}
 
+      {statusMessage && (
+        <Box marginLeft={1}>
+          <Text dimColor italic>{statusMessage}</Text>
+        </Box>
+      )}
+
       {state === "input" && <PromptInput onSubmit={handleSubmit} />}
     </Box>
   );
@@ -523,6 +546,16 @@ function App({
 
 export function startApp(props: AppProps) {
   return render(<App {...props} />);
+}
+
+export function showTranscriptMarkdown(sessionId: string): string {
+  const dbMessages = getMessages(sessionId);
+  const messages = dbMessages.map((m) => ({
+    role: m.role as Message["role"],
+    content: m.content,
+    round: m.round,
+  }));
+  return formatAsMarkdown(messages);
 }
 
 export function showTranscript(sessionId: string): void {
