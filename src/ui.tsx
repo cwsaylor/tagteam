@@ -22,6 +22,7 @@ import {
   formatConversationHistory,
 } from "./prompts.js";
 import type { WonderTwinsConfig } from "./config.js";
+import { InlineConfigEditor } from "./config-editor.js";
 
 marked.use(markedTerminal() as any);
 
@@ -44,7 +45,7 @@ interface AppProps {
   discuss?: boolean;
 }
 
-type AppState = "input" | "running" | "done";
+type AppState = "input" | "running" | "done" | "config";
 type Target = "both" | "claude" | "codex";
 
 interface ParsedInput {
@@ -480,12 +481,18 @@ function App({
     if (value === "/help") {
       setStatusMessage(
         [
-          "/help   Show this help",
-          "/new    Start a new session",
-          "/copy   Copy conversation to clipboard",
-          "/exit   Exit the app",
+          "/help    Show this help",
+          "/config  Show current configuration",
+          "/new     Start a new session",
+          "/copy    Copy conversation to clipboard",
+          "/exit    Exit the app",
         ].join("\n")
       );
+      return;
+    }
+
+    if (value === "/config") {
+      setState("config");
       return;
     }
 
@@ -556,6 +563,13 @@ function App({
         <Box marginLeft={1}>
           <Text dimColor italic>{statusMessage}</Text>
         </Box>
+      )}
+
+      {state === "config" && (
+        <InlineConfigEditor
+          isActive={state === "config"}
+          onClose={() => setState("input")}
+        />
       )}
 
       {state === "input" && <PromptInput onSubmit={handleSubmit} />}

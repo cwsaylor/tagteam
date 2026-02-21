@@ -2,6 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import { loadConfig, setConfigValue } from "./config.js";
 import { startApp, showTranscript, showTranscriptMarkdown, showSessionList } from "./ui.js";
+import { startConfigEditor } from "./config-editor.js";
 import {
   getMostRecentSession,
   getSession,
@@ -207,7 +208,19 @@ program
 // Config commands
 const configCmd = program
   .command("config")
-  .description("Manage configuration");
+  .description("Manage configuration")
+  .action(async () => {
+    const instance = startConfigEditor();
+    await instance.waitUntilExit();
+  });
+
+configCmd
+  .command("edit")
+  .description("Interactively edit configuration")
+  .action(async () => {
+    const instance = startConfigEditor();
+    await instance.waitUntilExit();
+  });
 
 configCmd
   .command("show")
