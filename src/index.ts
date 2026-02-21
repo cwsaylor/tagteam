@@ -287,4 +287,4 @@ process.on("SIGINT", () => {
   process.exit(0);
 });
 
-program.parse();
+program.parseAsync();
