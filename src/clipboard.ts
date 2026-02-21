@@ -10,13 +10,35 @@ export function copyToClipboard(text: string): void {
     cmd = "clip";
   } else {
     // Linux — try xclip first, fall back to xsel
+    let hasXclip = false;
+    let hasXsel = false;
     try {
       execSync("which xclip", { stdio: "ignore" });
+      hasXclip = true;
+    } catch {}
+    if (!hasXclip) {
+      try {
+        execSync("which xsel", { stdio: "ignore" });
+        hasXsel = true;
+      } catch {}
+    }
+
+    if (hasXclip) {
       cmd = "xclip -selection clipboard";
-    } catch {
+    } else if (hasXsel) {
       cmd = "xsel --clipboard --input";
+    } else {
+      throw new Error(
+        "Clipboard requires xclip or xsel. Install one with: sudo apt install xclip"
+      );
     }
   }
 
-  execSync(cmd, { input: text, stdio: ["pipe", "ignore", "ignore"] });
+  try {
+    execSync(cmd, { input: text, stdio: ["pipe", "ignore", "ignore"] });
+  } catch {
+    throw new Error(
+      `Failed to copy to clipboard using "${cmd.split(" ")[0]}". Check that it is installed and working.`
+    );
+  }
 }

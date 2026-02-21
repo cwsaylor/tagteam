@@ -12,6 +12,9 @@ import {
 import { getMessages } from "./db/messages.js";
 import { closeDb } from "./db/index.js";
 
+process.on("SIGTERM", () => { closeDb(); process.exit(0); });
+process.on("SIGINT", () => { closeDb(); process.exit(0); });
+
 const program = new Command();
 
 program

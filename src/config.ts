@@ -28,6 +28,12 @@ const DEFAULT_CONFIG: TagTeamConfig = {
 };
 
 export function getConfigDir(): string {
+  if (process.platform === "win32") {
+    return join(
+      process.env.APPDATA || join(homedir(), "AppData", "Roaming"),
+      "tagteam"
+    );
+  }
   return join(homedir(), ".tagteam");
 }
 

@@ -16,7 +16,7 @@ npx tagteam "your prompt here"
 
 ## Prerequisites
 
-- Node.js >= 22
+- Node.js >= 20
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI installed and authenticated
 - [Codex](https://github.com/openai/codex) CLI installed and authenticated
 
@@ -65,7 +65,7 @@ tagteam show <id> --markdown
 
 ### Configuration
 
-Configuration is stored in `~/.tagteam/config.toml`.
+Configuration is stored in `~/.tagteam/config.toml` (or `%APPDATA%\tagteam\config.toml` on Windows).
 
 ```bash
 # Interactive config editor
@@ -95,6 +95,24 @@ While in a session, type these slash commands:
 - `/new` - Start a fresh session
 - `/config` - Open the config editor
 - `Escape` - Interrupt running agents
+
+## Platform Notes
+
+**macOS** — Works out of the box.
+
+**Linux** — Clipboard support requires `xclip` or `xsel`:
+
+```bash
+sudo apt install xclip   # Debian/Ubuntu
+```
+
+If `better-sqlite3` doesn't have a prebuilt binary for your architecture, you'll need build tools:
+
+```bash
+sudo apt install build-essential python3
+```
+
+**Windows** — Recommended to use [Windows Terminal](https://aka.ms/terminal) for best rendering. If `better-sqlite3` fails to install, ensure you have the [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (C++ workload) installed.
 
 ## License
 
