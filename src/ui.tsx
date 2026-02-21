@@ -480,6 +480,18 @@ function App({
       return;
     }
 
+    if (value === "/help") {
+      setStatusMessage(
+        [
+          "/help   Show this help",
+          "/new    Start a new session",
+          "/copy   Copy conversation to clipboard",
+          "/exit   Exit the app",
+        ].join("\n")
+      );
+      return;
+    }
+
     if (value === "/new") {
       const newId = nanoid(12);
       createSession(newId, process.cwd());
