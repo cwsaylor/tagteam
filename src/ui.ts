@@ -1,10 +1,10 @@
 import chalk from "chalk";
 import ora, { type Ora } from "ora";
-import { Marked } from "marked";
-import TerminalRenderer from "marked-terminal";
+import { marked } from "marked";
+import { markedTerminal } from "marked-terminal";
 import type { AgentName } from "./agents/types.js";
 
-const marked = new Marked(TerminalRenderer as any);
+marked.use(markedTerminal() as any);
 
 const AGENT_COLORS: Record<AgentName, typeof chalk.blue> = {
   claude: chalk.magenta,
