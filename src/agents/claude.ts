@@ -44,6 +44,15 @@ async function* streamClaude(
     spawnErrorMsg = err.message;
   });
 
+  // Abort support — kill the child process when signalled
+  if (options.signal) {
+    if (options.signal.aborted) {
+      proc.kill();
+    } else {
+      options.signal.addEventListener("abort", () => proc.kill(), { once: true });
+    }
+  }
+
   const rl = createInterface({ input: proc.stdout! });
   let gotResultText = false;
 

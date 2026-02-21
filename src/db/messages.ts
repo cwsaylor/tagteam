@@ -45,3 +45,13 @@ export function getMessages(sessionId: string): Message[] {
     .prepare(`SELECT * FROM messages WHERE session_id = ? ORDER BY id`)
     .all(sessionId) as Message[];
 }
+
+export function deleteMessagesFromRound(
+  sessionId: string,
+  fromRound: number
+): void {
+  const db = getDb();
+  db.prepare(
+    `DELETE FROM messages WHERE session_id = ? AND round >= ?`
+  ).run(sessionId, fromRound);
+}

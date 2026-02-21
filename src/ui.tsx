@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { render, Box, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 import Spinner from "ink-spinner";
@@ -11,7 +11,7 @@ import type { AgentName } from "./agents/types.js";
 import { formatAsMarkdown } from "./format.js";
 import { copyToClipboard } from "./clipboard.js";
 import { createSession, touchSession, updateSessionTitle } from "./db/sessions.js";
-import { insertMessage, getMessages } from "./db/messages.js";
+import { insertMessage, getMessages, deleteMessagesFromRound } from "./db/messages.js";
 import { closeDb } from "./db/index.js";
 import {
   collaborationPrompt,
@@ -245,11 +245,32 @@ function App({
     }
   }, []);
 
-  // Ctrl+C handling
+  const abortRef = useRef<AbortController | null>(null);
+  const runningRoundRef = useRef<number | null>(null);
+
+  // Ctrl+C and Escape handling
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
+      abortRef.current?.abort();
       closeDb();
       exit();
+    }
+    if (key.escape && state === "running") {
+      abortRef.current?.abort();
+      abortRef.current = null;
+
+      // Remove the user prompt and any partial results from DB and state
+      if (runningRoundRef.current !== null) {
+        deleteMessagesFromRound(sessionId, runningRoundRef.current);
+        const fromRound = runningRoundRef.current;
+        setMessages((prev) => prev.filter((m) => m.round < fromRound));
+        runningRoundRef.current = null;
+      }
+
+      setThinkingAgents([]);
+      setDiscussionRound(0);
+      setStatusMessage("Interrupted.");
+      setState("input");
     }
   });
 
@@ -300,6 +321,9 @@ function App({
       return discussionPrompt(agent, history);
     };
 
+    const ac = new AbortController();
+    abortRef.current = ac;
+
     const results: Array<{ agent: AgentName; result: PromiseSettledResult<Awaited<ReturnType<typeof runClaude>>> }> = [];
     const promises: Array<Promise<void>> = [];
 
@@ -310,6 +334,7 @@ function App({
           systemPrompt: agentSystemPrompt("claude"),
           model: claudeModel,
           cwd,
+          signal: ac.signal,
         }).then(
           (value) => { results.push({ agent: "claude", result: { status: "fulfilled", value } }); },
           (reason) => { results.push({ agent: "claude", result: { status: "rejected", reason } }); }
@@ -323,6 +348,7 @@ function App({
           systemPrompt: agentSystemPrompt("codex"),
           model: codexModel,
           cwd,
+          signal: ac.signal,
         }).then(
           (value) => { results.push({ agent: "codex", result: { status: "fulfilled", value } }); },
           (reason) => { results.push({ agent: "codex", result: { status: "rejected", reason } }); }
@@ -331,6 +357,11 @@ function App({
     }
 
     await Promise.all(promises);
+    abortRef.current = null;
+
+    // If aborted, bail out — the Escape handler already reset UI state
+    if (ac.signal.aborted) return [];
+
     setThinkingAgents([]);
 
     const newMessages: Message[] = [];
@@ -381,6 +412,7 @@ function App({
     }
 
     const currentRound = roundNum;
+    runningRoundRef.current = currentRound;
 
     // Add user message
     const userMsg: Message = {
@@ -399,8 +431,12 @@ function App({
     const allMessages = [...messages, userMsg];
     const newMessages = await runAgents(allMessages, currentRound, target);
 
+    // If aborted, the Escape handler already cleaned up
+    if (newMessages.length === 0) return;
+
     setMessages((prev) => [...prev, ...newMessages]);
     setRoundNum(currentRound + 1);
+    runningRoundRef.current = null;
 
     if (currentRound === 0 && !existingSessionId) {
       const title = prompt.length > 60 ? prompt.slice(0, 57) + "..." : prompt;
@@ -414,6 +450,7 @@ function App({
   const runDiscussion = async (prompt: string) => {
     setConsensusReached(false);
     let currentRound = roundNum;
+    runningRoundRef.current = currentRound;
 
     // Add user message
     const userMsg: Message = {
@@ -447,6 +484,9 @@ function App({
         true,
       );
 
+      // If aborted, stop the discussion loop
+      if (newMessages.length === 0) break;
+
       setMessages((prev) => [...prev, ...newMessages]);
       allMessages = [...allMessages, ...newMessages];
       currentRound++;
@@ -465,6 +505,7 @@ function App({
 
     setRoundNum(currentRound);
     setDiscussionRound(0);
+    runningRoundRef.current = null;
     touchSession(sessionId);
     setState("input");
   };
@@ -482,10 +523,12 @@ function App({
       setStatusMessage(
         [
           "/help    Show this help",
-          "/config  Show current configuration",
+          "/config  Edit configuration",
           "/new     Start a new session",
           "/copy    Copy conversation to clipboard",
           "/exit    Exit the app",
+          "",
+          "Esc      Interrupt running agents",
         ].join("\n")
       );
       return;

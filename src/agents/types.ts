@@ -22,4 +22,5 @@ export interface AgentOptions {
   systemPrompt?: string;
   model?: string;
   cwd?: string;
+  signal?: AbortSignal;
 }
