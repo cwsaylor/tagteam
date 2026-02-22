@@ -67,7 +67,13 @@ Name two agents to override the active pair for that prompt:
 ```
 gemini and codex review this function
 gemini/claude compare your approaches
+```
+
+Add `discuss` to start a multi-round discussion — either word order works:
+
+```
 discuss codex and gemini what's the best caching strategy
+codex and gemini discuss what's the best caching strategy
 ```
 
 This works for any agent, not just your active pair. Addressed agents receive the full conversation history for context.

@@ -82,6 +82,11 @@ function parseInput(input: string): ParsedInput {
   // Check for ad-hoc pair: "gemini and codex ...", "gemini/codex ...", etc.
   const adHoc = tryParsePair(input);
   if (adHoc) {
+    // "gemini and codex discuss ..." — natural word order
+    const adHocLower = adHoc.rest.toLowerCase();
+    if (adHocLower.startsWith("discuss ")) {
+      return { target: adHoc.pair, prompt: adHoc.rest.slice(8).trim(), discuss: true };
+    }
     return { target: adHoc.pair, prompt: adHoc.rest, discuss: false };
   }
   // Check for single agent prefix
