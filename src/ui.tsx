@@ -469,6 +469,11 @@ function App({
       round: currentRound,
     });
 
+    if (currentRound === 0 && !existingSessionId) {
+      const title = prompt.length > 60 ? prompt.slice(0, 57) + "..." : prompt;
+      updateSessionTitle(sessionId, title);
+    }
+
     const allMessages = [...messages, userMsg];
     const newMessages = await runAgents(allMessages, currentRound, target);
 
@@ -478,11 +483,6 @@ function App({
     setMessages((prev) => [...prev, ...newMessages]);
     setRoundNum(currentRound + 1);
     runningRoundRef.current = null;
-
-    if (currentRound === 0 && !existingSessionId) {
-      const title = prompt.length > 60 ? prompt.slice(0, 57) + "..." : prompt;
-      updateSessionTitle(sessionId, title);
-    }
 
     touchSession(sessionId);
     setState("input");
