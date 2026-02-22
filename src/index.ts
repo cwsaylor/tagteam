@@ -4,6 +4,8 @@ import chalk from "chalk";
 import { loadConfig, setConfigValue } from "./config.js";
 import { startApp, showTranscript, showTranscriptMarkdown, showSessionList } from "./ui.js";
 import { startConfigEditor } from "./config-editor.js";
+import type { AgentName } from "./agents/types.js";
+import { getAgent, validateAgentPair } from "./agents/registry.js";
 import {
   getMostRecentSession,
   getSession,
@@ -28,32 +30,60 @@ function checkCli(name: string, installUrl: string): boolean {
   }
 }
 
-function preflight(): void {
-  const hasClaude = checkCli("claude", "https://docs.anthropic.com/en/docs/claude-code");
-  const hasCodex = checkCli("codex", "https://github.com/openai/codex");
-  if (!hasClaude || !hasCodex) {
+function preflight(pair: [AgentName, AgentName]): void {
+  let allFound = true;
+  for (const agent of pair) {
+    const descriptor = getAgent(agent);
+    if (!checkCli(descriptor.cliBinary, descriptor.installUrl)) {
+      allFound = false;
+    }
+  }
+  if (!allFound) {
     process.exit(1);
   }
+}
+
+function resolveAgentPair(opts: any, config: ReturnType<typeof loadConfig>): [AgentName, AgentName] {
+  if (opts.agents) {
+    const names = opts.agents.split(",").map((s: string) => s.trim());
+    return validateAgentPair(names);
+  }
+  return validateAgentPair(config.agents);
+}
+
+function resolveAgentModels(
+  pair: [AgentName, AgentName],
+  opts: any,
+  config: ReturnType<typeof loadConfig>
+): Record<AgentName, string> {
+  return {
+    claude: opts.claudeModel ?? config.claude.model,
+    codex: opts.codexModel ?? config.codex.model,
+    gemini: opts.geminiModel ?? config.gemini.model,
+  };
 }
 
 const program = new Command();
 
 program
   .name("tagteam")
-  .description("Tag Team - Orchestrate Claude and Codex collaboratively")
-  .version("0.1.0")
+  .description("Tag Team - Orchestrate AI agents collaboratively")
+  .version("0.2.0")
+  .option("--agents <pair>", "Agent pair to use (comma-separated, e.g. claude,gemini)")
   .option("--claude-model <model>", "Claude model to use")
   .option("--codex-model <model>", "Codex model to use")
+  .option("--gemini-model <model>", "Gemini model to use")
   .argument("[prompt...]", "Prompt to send to both agents")
   .action(async (promptParts: string[], opts) => {
-    preflight();
     const config = loadConfig();
+    const pair = resolveAgentPair(opts, config);
+    preflight(pair);
     const prompt = promptParts.join(" ") || undefined;
 
     const instance = startApp({
       initialPrompt: prompt,
-      claudeModel: opts.claudeModel ?? config.claude.model,
-      codexModel: opts.codexModel ?? config.codex.model,
+      agents: pair,
+      agentModels: resolveAgentModels(pair, opts, config),
       config,
     });
 
@@ -63,17 +93,19 @@ program
 // Discuss - auto-loop until consensus
 program
   .command("discuss")
-  .description("Have Claude and Codex discuss a topic until they reach consensus")
+  .description("Have agents discuss a topic until they reach consensus")
   .argument("<prompt...>", "Topic to discuss")
   .action(async (promptParts: string[]) => {
-    preflight();
     const config = loadConfig();
+    const parentOpts = program.opts();
+    const pair = resolveAgentPair(parentOpts, config);
+    preflight(pair);
     const prompt = promptParts.join(" ");
 
     const instance = startApp({
       initialPrompt: prompt,
-      claudeModel: config.claude.model,
-      codexModel: config.codex.model,
+      agents: pair,
+      agentModels: resolveAgentModels(pair, parentOpts, config),
       config,
       discuss: true,
     });
@@ -86,8 +118,10 @@ program
   .command("continue")
   .description("Resume the most recent session")
   .action(async () => {
-    preflight();
     const config = loadConfig();
+    const parentOpts = program.opts();
+    const pair = resolveAgentPair(parentOpts, config);
+    preflight(pair);
     const session = getMostRecentSession();
 
     if (!session) {
@@ -97,15 +131,15 @@ program
 
     const dbMessages = getMessages(session.id);
     const transcript = dbMessages.map((m) => ({
-      role: m.role as "user" | "claude" | "codex" | "system",
+      role: m.role,
       content: m.content,
       round: m.round,
     }));
 
     const instance = startApp({
       sessionId: session.id,
-      claudeModel: config.claude.model,
-      codexModel: config.codex.model,
+      agents: pair,
+      agentModels: resolveAgentModels(pair, parentOpts, config),
       config,
       showTranscript: transcript,
     });
@@ -118,8 +152,10 @@ program
   .command("resume [id]")
   .description("Resume a session by ID, or pick interactively")
   .action(async (id: string | undefined) => {
-    preflight();
     const config = loadConfig();
+    const parentOpts = program.opts();
+    const pair = resolveAgentPair(parentOpts, config);
+    preflight(pair);
 
     if (!id) {
       const sessions = listSessions(20);
@@ -157,15 +193,15 @@ program
           const session = sessions[num - 1];
           const dbMessages = getMessages(session.id);
           const transcript = dbMessages.map((m) => ({
-            role: m.role as "user" | "claude" | "codex" | "system",
+            role: m.role,
             content: m.content,
             round: m.round,
           }));
 
           const instance = startApp({
             sessionId: session.id,
-            claudeModel: config.claude.model,
-            codexModel: config.codex.model,
+            agents: pair,
+            agentModels: resolveAgentModels(pair, parentOpts, config),
             config,
             showTranscript: transcript,
           });
@@ -184,15 +220,15 @@ program
 
     const dbMessages = getMessages(session.id);
     const transcript = dbMessages.map((m) => ({
-      role: m.role as "user" | "claude" | "codex" | "system",
+      role: m.role,
       content: m.content,
       round: m.round,
     }));
 
     const instance = startApp({
       sessionId: session.id,
-      claudeModel: config.claude.model,
-      codexModel: config.codex.model,
+      agents: pair,
+      agentModels: resolveAgentModels(pair, parentOpts, config),
       config,
       showTranscript: transcript,
     });
@@ -257,10 +293,16 @@ configCmd
     const config = loadConfig();
     console.log(chalk.bold("\n Configuration:\n"));
     console.log(
-      chalk.dim(" claude.model = ") + chalk.white(config.claude.model)
+      chalk.dim(" agents           = ") + chalk.white(config.agents.join(", "))
     );
     console.log(
-      chalk.dim(" codex.model  = ") + chalk.white(config.codex.model)
+      chalk.dim(" claude.model     = ") + chalk.white(config.claude.model)
+    );
+    console.log(
+      chalk.dim(" codex.model      = ") + chalk.white(config.codex.model)
+    );
+    console.log(
+      chalk.dim(" gemini.model     = ") + chalk.white(config.gemini.model)
     );
     console.log(
       chalk.dim(" discussion.max_rounds = ") + chalk.white(String(config.discussion.max_rounds))

@@ -3,15 +3,32 @@ import { render, Box, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 import { loadConfig, setConfigValue } from "./config.js";
 import type { TagTeamConfig } from "./config.js";
+import { validateAgentPair } from "./agents/registry.js";
 
 interface ConfigField {
   key: string;
   label: string;
   get: (c: TagTeamConfig) => string;
   type: "string" | "number";
+  validate?: (value: string) => string | null;
 }
 
 const CONFIG_FIELDS: ConfigField[] = [
+  {
+    key: "agents",
+    label: "Agent pair",
+    get: (c) => c.agents.join(", "),
+    type: "string",
+    validate: (value) => {
+      try {
+        const names = value.split(",").map((s) => s.trim());
+        validateAgentPair(names);
+        return null;
+      } catch (e: any) {
+        return e.message;
+      }
+    },
+  },
   {
     key: "claude.model",
     label: "Claude model",
@@ -22,6 +39,12 @@ const CONFIG_FIELDS: ConfigField[] = [
     key: "codex.model",
     label: "Codex model",
     get: (c) => c.codex.model,
+    type: "string",
+  },
+  {
+    key: "gemini.model",
+    label: "Gemini model",
+    get: (c) => c.gemini.model,
     type: "string",
   },
   {
@@ -84,6 +107,15 @@ export function InlineConfigEditor({ isActive, onClose }: InlineConfigEditorProp
       const n = Number(value);
       if (!Number.isInteger(n) || n < 1) {
         setSavedMessage("Error: must be a positive integer");
+        setMode("select");
+        return;
+      }
+    }
+
+    if (field.validate) {
+      const error = field.validate(value);
+      if (error) {
+        setSavedMessage(`Error: ${error}`);
         setMode("select");
         return;
       }

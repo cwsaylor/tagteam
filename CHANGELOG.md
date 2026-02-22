@@ -4,19 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-02-21
+
+### Added
+
+- Gemini CLI support as a third agent option
+- Configurable agent pairs — pick any two from Claude, Codex, and Gemini
+- `--agents` CLI flag to choose agent pair (e.g. `--agents claude,gemini`)
+- `--gemini-model` CLI flag to override Gemini model
+- `agents` config key to set default agent pair in `config.toml`
+- `[gemini]` config section with `model` setting
+- Agent registry for extensible agent metadata and runner lookup
+- Validation for agent pairs in config editor
+- Graceful shutdown signal handlers (SIGTERM/SIGINT) to ensure database cleanup
+- Clipboard error handling with actionable messages when xclip/xsel is missing on Linux
+- Platform notes section in README for Windows, Linux, and macOS
+- Startup detection of agent CLIs with install links when missing
 
 ### Changed
 
 - Lowered Node.js requirement from >= 22 to >= 20
 - Config directory uses `%APPDATA%\tagteam` on Windows instead of `~/.tagteam`
-
-### Added
-
-- Graceful shutdown signal handlers (SIGTERM/SIGINT) to ensure database cleanup
-- Clipboard error handling with actionable messages when xclip/xsel is missing on Linux
-- Platform notes section in README for Windows, Linux, and macOS
-- Startup detection of `claude` and `codex` CLIs with install links when missing
+- Preflight check now only validates CLIs for the active agent pair
+- Prompts, UI, and formatting are now agent-agnostic via registry lookups
+- Config editor includes agent pair and Gemini model fields
+- Inline config changes (via `/config`) take effect immediately without restarting
 
 ## [0.1.0] - 2025-02-07
 

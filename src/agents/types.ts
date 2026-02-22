@@ -1,4 +1,4 @@
-export type AgentName = "claude" | "codex";
+export type AgentName = "claude" | "codex" | "gemini";
 
 export interface AgentEvent {
   type: "text" | "tool_call" | "tool_result" | "error" | "done";
@@ -23,4 +23,14 @@ export interface AgentOptions {
   model?: string;
   cwd?: string;
   signal?: AbortSignal;
+}
+
+export interface AgentDescriptor {
+  name: AgentName;
+  displayName: string;
+  color: string;
+  cliBinary: string;
+  installUrl: string;
+  org: string;
+  run: (options: AgentOptions) => Promise<AgentResponse>;
 }

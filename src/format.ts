@@ -1,5 +1,7 @@
+import { getAgent, isValidAgentName } from "./agents/registry.js";
+
 interface Message {
-  role: "user" | "claude" | "codex" | "system";
+  role: string;
   content: string;
   error?: boolean;
 }
@@ -12,8 +14,8 @@ export function formatAsMarkdown(messages: Message[]): string {
 
     if (msg.role === "user") {
       parts.push(`**You:** ${msg.content}`);
-    } else {
-      const name = msg.role === "claude" ? "Claude" : "Codex";
+    } else if (isValidAgentName(msg.role)) {
+      const name = getAgent(msg.role).displayName;
       if (msg.error) {
         parts.push(`**${name}:** *(error)*\n\n${msg.content}`);
       } else {

@@ -5,9 +5,8 @@ import Spinner from "ink-spinner";
 import { marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 import { nanoid } from "nanoid";
-import { runClaude } from "./agents/claude.js";
-import { runCodex } from "./agents/codex.js";
-import type { AgentName } from "./agents/types.js";
+import type { AgentName, AgentResponse } from "./agents/types.js";
+import { getAgent, isValidAgentName } from "./agents/registry.js";
 import { formatAsMarkdown } from "./format.js";
 import { copyToClipboard } from "./clipboard.js";
 import { createSession, touchSession, updateSessionTitle } from "./db/sessions.js";
@@ -21,7 +20,9 @@ import {
   CONSENSUS_MARKER,
   formatConversationHistory,
 } from "./prompts.js";
+import { loadConfig } from "./config.js";
 import type { TagTeamConfig } from "./config.js";
+import { validateAgentPair } from "./agents/registry.js";
 import { InlineConfigEditor } from "./config-editor.js";
 
 marked.use(markedTerminal() as any);
@@ -29,24 +30,24 @@ marked.use(markedTerminal() as any);
 // --- Types ---
 
 interface Message {
-  role: "user" | "claude" | "codex" | "system";
+  role: string;
   content: string;
   round: number;
   error?: boolean;
 }
 
-interface AppProps {
+export interface AppProps {
   initialPrompt?: string;
   sessionId?: string;
-  claudeModel: string;
-  codexModel: string;
+  agents: [AgentName, AgentName];
+  agentModels: Record<AgentName, string>;
   config: TagTeamConfig;
   showTranscript?: Message[];
   discuss?: boolean;
 }
 
 type AppState = "input" | "running" | "done" | "config";
-type Target = "both" | "claude" | "codex";
+type Target = "both" | AgentName;
 
 interface ParsedInput {
   target: Target;
@@ -54,16 +55,15 @@ interface ParsedInput {
   discuss: boolean;
 }
 
-function parseInput(input: string): ParsedInput {
+function parseInput(input: string, pair: [AgentName, AgentName]): ParsedInput {
   const lower = input.toLowerCase();
   if (lower.startsWith("discuss ")) {
     return { target: "both", prompt: input.slice(8).trim(), discuss: true };
   }
-  if (lower.startsWith("claude ") || lower.startsWith("claude, ")) {
-    return { target: "claude", prompt: input.slice(input.indexOf(" ") + 1).trim(), discuss: false };
-  }
-  if (lower.startsWith("codex ") || lower.startsWith("codex, ")) {
-    return { target: "codex", prompt: input.slice(input.indexOf(" ") + 1).trim(), discuss: false };
+  for (const agent of pair) {
+    if (lower.startsWith(`${agent} `) || lower.startsWith(`${agent}, `)) {
+      return { target: agent, prompt: input.slice(input.indexOf(" ") + 1).trim(), discuss: false };
+    }
   }
   return { target: "both", prompt: input, discuss: false };
 }
@@ -84,13 +84,13 @@ function AgentResponseBlock({
   content: string;
   error?: boolean;
 }) {
-  const color = agent === "claude" ? "magenta" : "green";
+  const descriptor = getAgent(agent);
 
   if (error) {
     return (
       <Box flexDirection="column" marginLeft={1} marginBottom={1}>
         <Text color="red" bold>
-          {agent === "claude" ? "Claude" : "Codex"} error:
+          {descriptor.displayName} error:
         </Text>
         <Box marginLeft={1}>
           <Text color="red">{content}</Text>
@@ -101,8 +101,8 @@ function AgentResponseBlock({
 
   return (
     <Box flexDirection="column" marginLeft={1} marginBottom={1}>
-      <Text color={color} bold>
-        {agent === "claude" ? "Claude" : "Codex"}:
+      <Text color={descriptor.color} bold>
+        {descriptor.displayName}:
       </Text>
       <Box marginLeft={1}>
         <RenderedMarkdown text={content} />
@@ -135,14 +135,13 @@ function UserMessage({ content }: { content: string }) {
 }
 
 function ThinkingIndicator({ agent }: { agent: AgentName }) {
-  const color = agent === "claude" ? "magenta" : "green";
-  const label = agent === "claude" ? "Claude" : "Codex";
+  const descriptor = getAgent(agent);
   return (
     <Box marginLeft={1}>
-      <Text color={color}>
+      <Text color={descriptor.color}>
         <Spinner type="dots" />
       </Text>
-      <Text color={color}> {label} is thinking...</Text>
+      <Text color={descriptor.color}> {descriptor.displayName} is thinking...</Text>
     </Box>
   );
 }
@@ -204,9 +203,9 @@ function PromptInput({
 function App({
   initialPrompt,
   sessionId: existingSessionId,
-  claudeModel,
-  codexModel,
-  config,
+  agents: initialPair,
+  agentModels: initialAgentModels,
+  config: initialConfig,
   showTranscript,
   discuss: initialDiscuss,
 }: AppProps) {
@@ -216,6 +215,9 @@ function App({
   const [state, setState] = useState<AppState>(
     initialPrompt ? "running" : "input"
   );
+  const [pair, setPair] = useState<[AgentName, AgentName]>(initialPair);
+  const [agentModels, setAgentModels] = useState<Record<AgentName, string>>(initialAgentModels);
+  const [config, setConfig] = useState<TagTeamConfig>(initialConfig);
   const [thinkingAgents, setThinkingAgents] = useState<AgentName[]>([]);
   const [discussionRound, setDiscussionRound] = useState(0);
   const [consensusReached, setConsensusReached] = useState(false);
@@ -274,7 +276,7 @@ function App({
     }
   });
 
-  // Run both agents, save results, return new messages
+  // Run agents, save results, return new messages
   const runAgents = async (
     currentMessages: Message[],
     round: number,
@@ -282,21 +284,16 @@ function App({
     promptOverride?: string,
     isDebate = false,
   ): Promise<Message[]> => {
-    const runCl = target === "both" || target === "claude";
-    const runCx = target === "both" || target === "codex";
-
-    const activeAgents: AgentName[] = [];
-    if (runCl) activeAgents.push("claude");
-    if (runCx) activeAgents.push("codex");
+    // Determine which agents to run
+    const activeAgents: AgentName[] = target === "both"
+      ? [...pair]
+      : [target];
     setThinkingAgents(activeAgents);
 
     const history = formatConversationHistory(
       currentMessages.map((m) => ({
         role: m.role,
-        agent:
-          m.role === "claude" || m.role === "codex"
-            ? (m.role as AgentName)
-            : undefined,
+        agent: isValidAgentName(m.role) ? m.role : undefined,
         content: m.content,
       }))
     );
@@ -304,7 +301,7 @@ function App({
     const cwd = process.cwd();
     const isFirstRound = round === 0 && !existingSessionId;
 
-    const agentPrompt = (agent: AgentName) => {
+    const agentPrompt = (_agent: AgentName) => {
       if (promptOverride) return promptOverride;
       if (isFirstRound && target === "both") {
         return currentMessages[currentMessages.length - 1]?.content || "";
@@ -314,44 +311,31 @@ function App({
 
     const agentSystemPrompt = (agent: AgentName) => {
       if (isDebate) {
-        if (isFirstRound) return debatePrompt(agent);
-        return debateRoundPrompt(agent, history);
+        if (isFirstRound) return debatePrompt(agent, pair);
+        return debateRoundPrompt(agent, history, pair);
       }
-      if (isFirstRound && target === "both") return collaborationPrompt(agent);
-      return discussionPrompt(agent, history);
+      if (isFirstRound && target === "both") return collaborationPrompt(agent, pair);
+      return discussionPrompt(agent, history, pair);
     };
 
     const ac = new AbortController();
     abortRef.current = ac;
 
-    const results: Array<{ agent: AgentName; result: PromiseSettledResult<Awaited<ReturnType<typeof runClaude>>> }> = [];
+    const results: Array<{ agent: AgentName; result: PromiseSettledResult<AgentResponse> }> = [];
     const promises: Array<Promise<void>> = [];
 
-    if (runCl) {
+    for (const agent of activeAgents) {
+      const descriptor = getAgent(agent);
       promises.push(
-        runClaude({
-          prompt: agentPrompt("claude"),
-          systemPrompt: agentSystemPrompt("claude"),
-          model: claudeModel,
+        descriptor.run({
+          prompt: agentPrompt(agent),
+          systemPrompt: agentSystemPrompt(agent),
+          model: agentModels[agent],
           cwd,
           signal: ac.signal,
         }).then(
-          (value) => { results.push({ agent: "claude", result: { status: "fulfilled", value } }); },
-          (reason) => { results.push({ agent: "claude", result: { status: "rejected", reason } }); }
-        )
-      );
-    }
-    if (runCx) {
-      promises.push(
-        runCodex({
-          prompt: agentPrompt("codex"),
-          systemPrompt: agentSystemPrompt("codex"),
-          model: codexModel,
-          cwd,
-          signal: ac.signal,
-        }).then(
-          (value) => { results.push({ agent: "codex", result: { status: "fulfilled", value } }); },
-          (reason) => { results.push({ agent: "codex", result: { status: "rejected", reason } }); }
+          (value) => { results.push({ agent, result: { status: "fulfilled", value } }); },
+          (reason) => { results.push({ agent, result: { status: "rejected", reason } }); }
         )
       );
     }
@@ -405,7 +389,7 @@ function App({
   };
 
   const runRound = async (rawInput: string) => {
-    const { target, prompt, discuss } = parseInput(rawInput);
+    const { target, prompt, discuss } = parseInput(rawInput, pair);
 
     if (discuss) {
       return runDiscussion(prompt);
@@ -491,13 +475,13 @@ function App({
       allMessages = [...allMessages, ...newMessages];
       currentRound++;
 
-      // Check for consensus — both agents must include the marker
-      const claudeMsg = newMessages.find((m) => m.role === "claude" && !m.error);
-      const codexMsg = newMessages.find((m) => m.role === "codex" && !m.error);
-      const claudeConsensus = claudeMsg?.content.includes(CONSENSUS_MARKER) ?? false;
-      const codexConsensus = codexMsg?.content.includes(CONSENSUS_MARKER) ?? false;
+      // Check for consensus — both agents in the pair must include the marker
+      const consensusFlags = pair.map((agent) => {
+        const msg = newMessages.find((m) => m.role === agent && !m.error);
+        return msg?.content.includes(CONSENSUS_MARKER) ?? false;
+      });
 
-      if (claudeConsensus && codexConsensus) {
+      if (consensusFlags.every(Boolean)) {
         setConsensusReached(true);
         break;
       }
@@ -575,7 +559,7 @@ function App({
         if (msg.role === "user") {
           return <UserMessage key={i} content={msg.content} />;
         }
-        if (msg.role === "claude" || msg.role === "codex") {
+        if (isValidAgentName(msg.role)) {
           return (
             <AgentResponseBlock
               key={i}
@@ -611,7 +595,22 @@ function App({
       {state === "config" && (
         <InlineConfigEditor
           isActive={state === "config"}
-          onClose={() => setState("input")}
+          onClose={() => {
+            const updated = loadConfig();
+            setConfig(updated);
+            try {
+              setPair(validateAgentPair(updated.agents));
+            } catch {
+              // keep current pair if new config is invalid
+            }
+            setAgentModels((prev) => ({
+              ...prev,
+              claude: updated.claude.model,
+              codex: updated.codex.model,
+              gemini: updated.gemini.model,
+            }));
+            setState("input");
+          }}
         />
       )}
 
@@ -629,7 +628,7 @@ export function startApp(props: AppProps) {
 export function showTranscriptMarkdown(sessionId: string): string {
   const dbMessages = getMessages(sessionId);
   const messages = dbMessages.map((m) => ({
-    role: m.role as Message["role"],
+    role: m.role,
     content: m.content,
     round: m.round,
   }));
@@ -639,7 +638,7 @@ export function showTranscriptMarkdown(sessionId: string): string {
 export function showTranscript(sessionId: string): void {
   const dbMessages = getMessages(sessionId);
   const messages: Message[] = dbMessages.map((m) => ({
-    role: m.role as Message["role"],
+    role: m.role,
     content: m.content,
     round: m.round,
   }));
@@ -651,7 +650,7 @@ export function showTranscript(sessionId: string): void {
         if (msg.role === "user") {
           return <UserMessage key={i} content={msg.content} />;
         }
-        if (msg.role === "claude" || msg.role === "codex") {
+        if (isValidAgentName(msg.role)) {
           return (
             <AgentResponseBlock key={i} agent={msg.role} content={msg.content} />
           );

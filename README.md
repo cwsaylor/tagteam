@@ -1,6 +1,6 @@
 # tagteam
 
-Orchestrate Claude and Codex in collaborative AI sessions. Send a prompt to both agents simultaneously, then let them build on each other's responses in multi-round discussions.
+Orchestrate AI agents in collaborative sessions. Pick any two from Claude, Codex, and Gemini — send a prompt to both simultaneously, then let them build on each other's responses in multi-round discussions.
 
 ## Install
 
@@ -17,8 +17,10 @@ npx tagteam "your prompt here"
 ## Prerequisites
 
 - Node.js >= 20
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI installed and authenticated
-- [Codex](https://github.com/openai/codex) CLI installed and authenticated
+- At least two of the following CLIs installed and authenticated:
+  - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (Anthropic)
+  - [Codex](https://github.com/openai/codex) (OpenAI)
+  - [Gemini CLI](https://github.com/google-gemini/gemini-cli) (Google)
 
 ## Usage
 
@@ -36,9 +38,24 @@ Launches an interactive TUI where you can type prompts and see responses from bo
 tagteam "explain how this codebase handles authentication"
 ```
 
+### Choosing agents
+
+By default, tagteam uses Claude and Codex. Use `--agents` to pick a different pair:
+
+```bash
+tagteam --agents claude,gemini "compare these approaches"
+tagteam --agents codex,gemini "review this code"
+```
+
+You can also set the default pair in your config:
+
+```toml
+agents = ["claude", "gemini"]
+```
+
 ### Discussion mode
 
-Have Claude and Codex discuss a topic in rounds until they reach consensus:
+Have your agents discuss a topic in rounds until they reach consensus:
 
 ```bash
 tagteam discuss "what's the best approach for caching in this app"
@@ -75,16 +92,20 @@ tagteam config
 tagteam config show
 
 # Set a value
+tagteam config set agents claude,gemini
 tagteam config set claude.model sonnet
 tagteam config set codex.model gpt-5.3-codex
+tagteam config set gemini.model gemini-2.5-pro
 tagteam config set discussion.max_rounds 10
 ```
 
 ### CLI options
 
 ```bash
+tagteam --agents claude,gemini   # Choose agent pair
 tagteam --claude-model <model>   # Override Claude model
 tagteam --codex-model <model>    # Override Codex model
+tagteam --gemini-model <model>   # Override Gemini model
 ```
 
 ## Interactive commands
@@ -93,7 +114,9 @@ While in a session, type these slash commands:
 
 - `/help` - List available commands
 - `/new` - Start a fresh session
-- `/config` - Open the config editor
+- `/config` - Open the config editor (changes take effect immediately)
+- `/copy` - Copy conversation to clipboard
+- `/exit` - Exit the app
 - `Escape` - Interrupt running agents
 
 ## Platform Notes

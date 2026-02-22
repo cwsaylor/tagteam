@@ -4,10 +4,14 @@ import { homedir } from "node:os";
 import { parse, stringify } from "smol-toml";
 
 export interface TagTeamConfig {
+  agents: [string, string];
   claude: {
     model: string;
   };
   codex: {
+    model: string;
+  };
+  gemini: {
     model: string;
   };
   discussion: {
@@ -16,11 +20,15 @@ export interface TagTeamConfig {
 }
 
 const DEFAULT_CONFIG: TagTeamConfig = {
+  agents: ["claude", "codex"],
   claude: {
     model: "sonnet",
   },
   codex: {
     model: "gpt-5.3-codex",
+  },
+  gemini: {
+    model: "gemini-2.5-pro",
   },
   discussion: {
     max_rounds: 10,
@@ -59,8 +67,12 @@ export function loadConfig(): TagTeamConfig {
     const raw = readFileSync(configPath, "utf-8");
     const parsed = parse(raw) as any;
     return {
+      agents: Array.isArray(parsed.agents) && parsed.agents.length === 2
+        ? parsed.agents as [string, string]
+        : [...DEFAULT_CONFIG.agents],
       claude: { ...DEFAULT_CONFIG.claude, ...parsed.claude },
       codex: { ...DEFAULT_CONFIG.codex, ...parsed.codex },
+      gemini: { ...DEFAULT_CONFIG.gemini, ...parsed.gemini },
       discussion: { ...DEFAULT_CONFIG.discussion, ...parsed.discussion },
     };
   } catch {
@@ -83,11 +95,17 @@ export function setConfigValue(
 
   if (parts.length === 1) {
     switch (parts[0]) {
+      case "agents":
+        config.agents = value.split(",").map((s) => s.trim()) as [string, string];
+        break;
       case "claude_model":
         config.claude.model = value;
         break;
       case "codex_model":
         config.codex.model = value;
+        break;
+      case "gemini_model":
+        config.gemini.model = value;
         break;
       case "discussion_max_rounds":
         config.discussion.max_rounds = Number(value);
@@ -101,6 +119,8 @@ export function setConfigValue(
       config.claude.model = value;
     } else if (section === "codex" && field === "model") {
       config.codex.model = value;
+    } else if (section === "gemini" && field === "model") {
+      config.gemini.model = value;
     } else if (section === "discussion" && field === "max_rounds") {
       config.discussion.max_rounds = Number(value);
     } else {

@@ -1,7 +1,7 @@
 {
   "name": "tagteam",
-  "version": "0.1.0",
-  "description": "Orchestrate Claude and Codex in collaborative AI sessions",
+  "version": "0.2.0",
+  "description": "Orchestrate AI agents (Claude, Codex, Gemini) in collaborative sessions",
   "type": "module",
   "bin": {
     "tagteam": "./dist/index.js"
@@ -19,6 +19,7 @@
     "ai",
     "claude",
     "codex",
+    "gemini",
     "agents",
     "orchestration"
   ],
