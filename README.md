@@ -62,11 +62,12 @@ gemini what do you think about this approach?
 claude summarize the discussion so far
 ```
 
-Name two agents to override the active pair for that prompt:
+Name two agents to override the active pair for that prompt (separators: `and`, `/`, `&`, `,`):
 
 ```
 gemini and codex review this function
 gemini/claude compare your approaches
+gemini & codex review this function
 ```
 
 Add `discuss` to start a multi-round discussion — either word order works:
@@ -113,7 +114,7 @@ tagteam show <id> --markdown
 
 ### Configuration
 
-Configuration is stored in `~/.tagteam/config.toml` (or `%APPDATA%\tagteam\config.toml` on Windows).
+Configuration is stored in `~/.tagteam/config.toml` (or `%APPDATA%\tagteam\config.toml` on Windows). Session data is stored in `~/.tagteam/tagteam.db`.
 
 ```bash
 # Interactive config editor
@@ -129,6 +130,16 @@ tagteam config set codex.model gpt-5.3-codex
 tagteam config set gemini.model gemini-2.5-pro
 tagteam config set discussion.max_rounds 10
 ```
+
+Default values:
+
+| Key | Default |
+|-----|---------|
+| `agents` | `claude, codex` |
+| `claude.model` | `sonnet` |
+| `codex.model` | `gpt-5.3-codex` |
+| `gemini.model` | `gemini-2.5-pro` |
+| `discussion.max_rounds` | `10` |
 
 ### CLI options
 
