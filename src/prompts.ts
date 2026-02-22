@@ -52,6 +52,16 @@ ${conversationHistory}
 Respond to the latest round. If you agree with ${other}'s position on all key points, end with [CONSENSUS]. Otherwise, continue the discussion.`;
 }
 
+export function directPrompt(
+  conversationHistory: string,
+): string {
+  return `You are being addressed directly in a multi-agent session. Here is the conversation so far:
+
+${conversationHistory}
+
+Respond to the user's latest message. Be concise.`;
+}
+
 export const CONSENSUS_MARKER = "[CONSENSUS]";
 
 export function formatConversationHistory(

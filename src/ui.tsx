@@ -6,7 +6,7 @@ import { marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 import { nanoid } from "nanoid";
 import type { AgentName, AgentResponse } from "./agents/types.js";
-import { getAgent, isValidAgentName } from "./agents/registry.js";
+import { getAgent, getAllAgentNames, isValidAgentName } from "./agents/registry.js";
 import { formatAsMarkdown } from "./format.js";
 import { copyToClipboard } from "./clipboard.js";
 import { createSession, touchSession, updateSessionTitle } from "./db/sessions.js";
@@ -17,6 +17,7 @@ import {
   discussionPrompt,
   debatePrompt,
   debateRoundPrompt,
+  directPrompt,
   CONSENSUS_MARKER,
   formatConversationHistory,
 } from "./prompts.js";
@@ -55,12 +56,12 @@ interface ParsedInput {
   discuss: boolean;
 }
 
-function parseInput(input: string, pair: [AgentName, AgentName]): ParsedInput {
+function parseInput(input: string): ParsedInput {
   const lower = input.toLowerCase();
   if (lower.startsWith("discuss ")) {
     return { target: "both", prompt: input.slice(8).trim(), discuss: true };
   }
-  for (const agent of pair) {
+  for (const agent of getAllAgentNames()) {
     if (lower.startsWith(`${agent} `) || lower.startsWith(`${agent}, `)) {
       return { target: agent, prompt: input.slice(input.indexOf(" ") + 1).trim(), discuss: false };
     }
@@ -301,20 +302,24 @@ function App({
     const cwd = process.cwd();
     const isFirstRound = round === 0 && !existingSessionId;
 
+    const userPrompt = currentMessages[currentMessages.length - 1]?.content || "";
+
     const agentPrompt = (_agent: AgentName) => {
       if (promptOverride) return promptOverride;
-      if (isFirstRound && target === "both") {
-        return currentMessages[currentMessages.length - 1]?.content || "";
-      }
+      if (target !== "both") return userPrompt;
+      if (isFirstRound) return userPrompt;
       return "Provide your response for this round.";
     };
 
     const agentSystemPrompt = (agent: AgentName) => {
+      if (target !== "both") {
+        return history ? directPrompt(history) : undefined;
+      }
       if (isDebate) {
         if (isFirstRound) return debatePrompt(agent, pair);
         return debateRoundPrompt(agent, history, pair);
       }
-      if (isFirstRound && target === "both") return collaborationPrompt(agent, pair);
+      if (isFirstRound) return collaborationPrompt(agent, pair);
       return discussionPrompt(agent, history, pair);
     };
 
@@ -389,7 +394,7 @@ function App({
   };
 
   const runRound = async (rawInput: string) => {
-    const { target, prompt, discuss } = parseInput(rawInput, pair);
+    const { target, prompt, discuss } = parseInput(rawInput);
 
     if (discuss) {
       return runDiscussion(prompt);
