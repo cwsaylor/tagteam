@@ -277,12 +277,13 @@ function App({
     return 0;
   });
 
-  // Create session on first mount if new
-  useEffect(() => {
-    if (!existingSessionId) {
-      createSession(sessionId, process.cwd());
+  const sessionCreatedRef = useRef(!!existingSessionId);
+  const ensureSession = (id: string) => {
+    if (!sessionCreatedRef.current) {
+      createSession(id, process.cwd());
+      sessionCreatedRef.current = true;
     }
-  }, []);
+  };
 
   // Handle initial prompt
   useEffect(() => {
@@ -455,6 +456,13 @@ function App({
     const currentRound = roundNum;
     runningRoundRef.current = currentRound;
 
+    // Ensure session row exists and set title on first prompt
+    ensureSession(sessionId);
+    if (currentRound === 0) {
+      const title = prompt.length > 60 ? prompt.slice(0, 57) + "..." : prompt;
+      updateSessionTitle(sessionId, title);
+    }
+
     // Add user message
     const userMsg: Message = {
       role: "user",
@@ -468,11 +476,6 @@ function App({
       content: rawInput,
       round: currentRound,
     });
-
-    if (currentRound === 0 && !existingSessionId) {
-      const title = prompt.length > 60 ? prompt.slice(0, 57) + "..." : prompt;
-      updateSessionTitle(sessionId, title);
-    }
 
     const allMessages = [...messages, userMsg];
     const newMessages = await runAgents(allMessages, currentRound, target);
@@ -494,6 +497,13 @@ function App({
     let currentRound = roundNum;
     runningRoundRef.current = currentRound;
 
+    // Ensure session row exists and set title on first prompt
+    ensureSession(sessionId);
+    if (currentRound === 0) {
+      const title = prompt.length > 60 ? prompt.slice(0, 57) + "..." : prompt;
+      updateSessionTitle(sessionId, title);
+    }
+
     // Add user message
     const userMsg: Message = {
       role: "user",
@@ -509,11 +519,6 @@ function App({
     });
 
     let allMessages = [...messages, userMsg];
-
-    if (currentRound === 0 && !existingSessionId) {
-      const title = prompt.length > 60 ? prompt.slice(0, 57) + "..." : prompt;
-      updateSessionTitle(sessionId, title);
-    }
 
     for (let disc = 1; disc <= config.discussion.max_rounds; disc++) {
       setDiscussionRound(disc);
@@ -584,7 +589,7 @@ function App({
 
     if (value === "/new") {
       const newId = nanoid(12);
-      createSession(newId, process.cwd());
+      sessionCreatedRef.current = false;
       setSessionId(newId);
       setMessages([]);
       setRoundNum(0);
