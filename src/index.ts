@@ -11,6 +11,8 @@ import {
   getSession,
   getSessionByPrefix,
   listSessions,
+  deleteSession,
+  deleteAllSessions,
 } from "./db/sessions.js";
 import { getMessages } from "./db/messages.js";
 import { closeDb } from "./db/index.js";
@@ -68,7 +70,7 @@ const program = new Command();
 program
   .name("tagteam")
   .description("Tag Team - Orchestrate AI agents collaboratively")
-  .version("0.2.0")
+  .version("0.3.0")
   .option("--agents <pair>", "Agent pair to use (comma-separated, e.g. claude,gemini)")
   .option("--claude-model <model>", "Claude model to use")
   .option("--codex-model <model>", "Codex model to use")
@@ -237,9 +239,9 @@ program
   });
 
 // History
-program
+const historyCmd = program
   .command("history")
-  .description("List recent sessions")
+  .description("List, remove, or clear sessions")
   .option("-n, --limit <n>", "Number of sessions to show", parseInt, 20)
   .action((opts) => {
     const sessions = listSessions(opts.limit);
@@ -247,6 +249,54 @@ program
     showSessionList(sessions);
     console.log();
     closeDb();
+  });
+
+historyCmd
+  .command("rm <id>")
+  .description("Delete a session by ID or prefix")
+  .action((id: string) => {
+    const session = getSession(id) || getSessionByPrefix(id);
+    if (!session) {
+      console.log(chalk.red(` Session not found: ${id}`));
+      process.exit(1);
+    }
+    deleteSession(session.id);
+    const sid = session.id.slice(0, 7);
+    const title = session.title || "(untitled)";
+    console.log(chalk.green(` Deleted session ${sid} — ${title}`));
+    closeDb();
+  });
+
+historyCmd
+  .command("clear")
+  .description("Delete all sessions")
+  .action(async () => {
+    const sessions = listSessions();
+    if (sessions.length === 0) {
+      console.log(chalk.yellow(" No sessions to delete."));
+      closeDb();
+      return;
+    }
+
+    const readline = await import("node:readline");
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    rl.question(
+      chalk.yellow(` Delete all ${sessions.length} session(s)? [y/N] `),
+      (answer) => {
+        rl.close();
+        if (answer.trim().toLowerCase() === "y") {
+          deleteAllSessions();
+          console.log(chalk.green(` Deleted ${sessions.length} session(s).`));
+        } else {
+          console.log(" Cancelled.");
+        }
+        closeDb();
+      }
+    );
   });
 
 // Show transcript

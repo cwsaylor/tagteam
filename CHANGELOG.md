@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Address any agent by name (e.g. `gemini explain this`) even if it's not in the active pair, with full conversation context
 - Ad-hoc agent pairs from the prompt (e.g. `gemini and codex review this`, `gemini/claude compare`) to override the configured pair for that prompt
 - Ad-hoc pairs work with discussion mode in either word order (e.g. `discuss codex and gemini ...` or `codex and gemini discuss ...`)
+- `tagteam history rm <id>` to delete a specific session by ID or prefix
+- `tagteam history clear` to delete all sessions (with confirmation prompt)
 
 ## [0.2.0] - 2026-02-21
 

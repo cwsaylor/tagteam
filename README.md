@@ -95,6 +95,12 @@ tagteam continue
 # List recent sessions
 tagteam history
 
+# Delete a specific session
+tagteam history rm <id>
+
+# Delete all sessions
+tagteam history clear
+
 # Resume a specific session by ID
 tagteam resume <id>
 

@@ -64,3 +64,15 @@ export function touchSession(id: string): void {
     id
   );
 }
+
+export function deleteSession(id: string): void {
+  const db = getDb();
+  db.prepare(`DELETE FROM messages WHERE session_id = ?`).run(id);
+  db.prepare(`DELETE FROM sessions WHERE id = ?`).run(id);
+}
+
+export function deleteAllSessions(): void {
+  const db = getDb();
+  db.prepare(`DELETE FROM messages`).run();
+  db.prepare(`DELETE FROM sessions`).run();
+}
