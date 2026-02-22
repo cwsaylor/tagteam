@@ -48,7 +48,7 @@ export interface AppProps {
 }
 
 type AppState = "input" | "running" | "done" | "config";
-type Target = "both" | AgentName;
+type Target = "both" | AgentName | [AgentName, AgentName];
 
 interface ParsedInput {
   target: Target;
@@ -56,11 +56,35 @@ interface ParsedInput {
   discuss: boolean;
 }
 
+const PAIR_SEPARATORS = /^(\w+)\s*(?:and|&|\/|,)\s*(\w+)[\s,]\s*/i;
+
+function tryParsePair(text: string): { pair: [AgentName, AgentName]; rest: string } | null {
+  const match = text.toLowerCase().match(PAIR_SEPARATORS);
+  if (!match) return null;
+  const [fullMatch, first, second] = match;
+  if (isValidAgentName(first) && isValidAgentName(second) && first !== second) {
+    return { pair: [first, second], rest: text.slice(fullMatch.length).trim() };
+  }
+  return null;
+}
+
 function parseInput(input: string): ParsedInput {
   const lower = input.toLowerCase();
   if (lower.startsWith("discuss ")) {
-    return { target: "both", prompt: input.slice(8).trim(), discuss: true };
+    const rest = input.slice(8).trim();
+    // Check for "discuss gemini and codex ..."
+    const adHoc = tryParsePair(rest);
+    if (adHoc) {
+      return { target: adHoc.pair, prompt: adHoc.rest, discuss: true };
+    }
+    return { target: "both", prompt: rest, discuss: true };
   }
+  // Check for ad-hoc pair: "gemini and codex ...", "gemini/codex ...", etc.
+  const adHoc = tryParsePair(input);
+  if (adHoc) {
+    return { target: adHoc.pair, prompt: adHoc.rest, discuss: false };
+  }
+  // Check for single agent prefix
   for (const agent of getAllAgentNames()) {
     if (lower.startsWith(`${agent} `) || lower.startsWith(`${agent}, `)) {
       return { target: agent, prompt: input.slice(input.indexOf(" ") + 1).trim(), discuss: false };
@@ -286,9 +310,11 @@ function App({
     isDebate = false,
   ): Promise<Message[]> => {
     // Determine which agents to run
-    const activeAgents: AgentName[] = target === "both"
-      ? [...pair]
-      : [target];
+    const activeAgents: AgentName[] = Array.isArray(target)
+      ? target
+      : target === "both"
+        ? [...pair]
+        : [target];
     setThinkingAgents(activeAgents);
 
     const history = formatConversationHistory(
@@ -303,24 +329,27 @@ function App({
     const isFirstRound = round === 0 && !existingSessionId;
 
     const userPrompt = currentMessages[currentMessages.length - 1]?.content || "";
+    const isSingleAgent = !Array.isArray(target) && target !== "both";
+    // Use the ad-hoc pair for prompt context, or fall back to the configured pair
+    const promptPair: [AgentName, AgentName] = Array.isArray(target) ? target : pair;
 
     const agentPrompt = (_agent: AgentName) => {
       if (promptOverride) return promptOverride;
-      if (target !== "both") return userPrompt;
+      if (isSingleAgent) return userPrompt;
       if (isFirstRound) return userPrompt;
       return "Provide your response for this round.";
     };
 
     const agentSystemPrompt = (agent: AgentName) => {
-      if (target !== "both") {
+      if (isSingleAgent) {
         return history ? directPrompt(history) : undefined;
       }
       if (isDebate) {
-        if (isFirstRound) return debatePrompt(agent, pair);
-        return debateRoundPrompt(agent, history, pair);
+        if (isFirstRound) return debatePrompt(agent, promptPair);
+        return debateRoundPrompt(agent, history, promptPair);
       }
-      if (isFirstRound) return collaborationPrompt(agent, pair);
-      return discussionPrompt(agent, history, pair);
+      if (isFirstRound) return collaborationPrompt(agent, promptPair);
+      return discussionPrompt(agent, history, promptPair);
     };
 
     const ac = new AbortController();
@@ -397,7 +426,7 @@ function App({
     const { target, prompt, discuss } = parseInput(rawInput);
 
     if (discuss) {
-      return runDiscussion(prompt);
+      return runDiscussion(prompt, Array.isArray(target) ? target : undefined);
     }
 
     const currentRound = roundNum;
@@ -436,7 +465,8 @@ function App({
     setState("input");
   };
 
-  const runDiscussion = async (prompt: string) => {
+  const runDiscussion = async (prompt: string, adHocPair?: [AgentName, AgentName]) => {
+    const discussionTarget: Target = adHocPair ?? "both";
     setConsensusReached(false);
     let currentRound = roundNum;
     runningRoundRef.current = currentRound;
@@ -468,7 +498,7 @@ function App({
       const newMessages = await runAgents(
         allMessages,
         currentRound,
-        "both",
+        discussionTarget,
         disc === 1 ? prompt : "Provide your response for this round.",
         true,
       );
@@ -480,8 +510,9 @@ function App({
       allMessages = [...allMessages, ...newMessages];
       currentRound++;
 
-      // Check for consensus — both agents in the pair must include the marker
-      const consensusFlags = pair.map((agent) => {
+      // Check for consensus — both active agents must include the marker
+      const activePair = adHocPair ?? pair;
+      const consensusFlags = activePair.map((agent) => {
         const msg = newMessages.find((m) => m.role === agent && !m.error);
         return msg?.content.includes(CONSENSUS_MARKER) ?? false;
       });

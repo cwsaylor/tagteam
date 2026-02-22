@@ -53,7 +53,7 @@ You can also set the default pair in your config:
 agents = ["claude", "gemini"]
 ```
 
-### Addressing a single agent
+### Addressing agents inline
 
 Prefix your prompt with an agent name to send it to just that agent:
 
@@ -62,7 +62,15 @@ gemini what do you think about this approach?
 claude summarize the discussion so far
 ```
 
-This works for any agent, not just your active pair. The addressed agent receives the full conversation history for context.
+Name two agents to override the active pair for that prompt:
+
+```
+gemini and codex review this function
+gemini/claude compare your approaches
+discuss codex and gemini what's the best caching strategy
+```
+
+This works for any agent, not just your active pair. Addressed agents receive the full conversation history for context.
 
 ### Discussion mode
 
