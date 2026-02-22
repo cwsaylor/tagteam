@@ -166,7 +166,7 @@ function QuickHelp() {
       {examples.map(([cmd, desc]) => (
         <Text key={cmd} dimColor>{cmd!.padEnd(col)}{"→ "}{desc}</Text>
       ))}
-      <Text dimColor>{"  /help for more"}</Text>
+      <Text dimColor>{"/help for more"}</Text>
     </Box>
   );
 }
