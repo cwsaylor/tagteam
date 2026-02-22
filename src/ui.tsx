@@ -153,6 +153,24 @@ function Header({ sessionId }: { sessionId: string }) {
   );
 }
 
+function QuickHelp() {
+  const col = 38;
+  const examples = [
+    ["ask anything", "sends to both agents"],
+    ["gemini explain this", "sends to one agent"],
+    ["discuss best approach", "multi-round debate"],
+    ["gemini and codex discuss review app", "pick agents + debate"],
+  ];
+  return (
+    <Box flexDirection="column" marginLeft={2} marginBottom={1}>
+      {examples.map(([cmd, desc]) => (
+        <Text key={cmd} dimColor>{cmd!.padEnd(col)}{"→ "}{desc}</Text>
+      ))}
+      <Text dimColor>{"  /help for more"}</Text>
+    </Box>
+  );
+}
+
 function UserMessage({ content }: { content: string }) {
   return (
     <Box marginLeft={1} marginBottom={1}>
@@ -595,6 +613,8 @@ function App({
   return (
     <Box flexDirection="column">
       <Header sessionId={sessionId} />
+
+      {messages.length === 0 && state === "input" && <QuickHelp />}
 
       {messages.map((msg, i) => {
         if (msg.role === "user") {
