@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Address any agent by name (e.g. `gemini explain this`) even if it's not in the active pair, with full conversation context
+
 ## [0.2.0] - 2026-02-21
 
 ### Added
@@ -16,7 +22,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - `[gemini]` config section with `model` setting
 - Agent registry for extensible agent metadata and runner lookup
 - Validation for agent pairs in config editor
-- Address any agent by name (e.g. `gemini explain this`) even if it's not in the active pair, with full conversation context
 - Graceful shutdown signal handlers (SIGTERM/SIGINT) to ensure database cleanup
 - Clipboard error handling with actionable messages when xclip/xsel is missing on Linux
 - Platform notes section in README for Windows, Linux, and macOS
