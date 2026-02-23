@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] - 2026-02-23
+
+### Fixed
+
+- Large discussions no longer cause UI sluggishness — completed rounds commit to the terminal's native scrollback buffer via Ink's `<Static>` component
+- Users can scroll back to read earlier messages (mouse wheel, Shift+PageUp) while agents are still thinking
+- Markdown rendering (`marked.parse()`) is now memoized per-message, eliminating redundant parsing on every spinner tick
+- `AgentResponseBlock` and `UserMessage` wrapped with `React.memo` to skip unnecessary re-renders
+
 ## [0.4.0] - 2026-02-22
 
 ### Added

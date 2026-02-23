@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { render, Box, Text, useApp, useInput } from "ink";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { render, Box, Text, useApp, useInput, Static } from "ink";
 import TextInput from "ink-text-input";
 import Spinner from "ink-spinner";
 import { marked } from "marked";
@@ -40,6 +40,7 @@ marked.use(markedTerminal() as any);
 // --- Types ---
 
 interface Message {
+  id: string;
   role: string;
   content: string;
   round: number;
@@ -110,11 +111,11 @@ function parseInput(input: string): ParsedInput {
 // --- Components ---
 
 function RenderedMarkdown({ text }: { text: string }) {
-  const rendered = (marked.parse(text) as string).trimEnd();
+  const rendered = useMemo(() => (marked.parse(text) as string).trimEnd(), [text]);
   return <Text>{rendered}</Text>;
 }
 
-function AgentResponseBlock({
+const AgentResponseBlock = React.memo(function AgentResponseBlock({
   agent,
   content,
   error,
@@ -148,7 +149,7 @@ function AgentResponseBlock({
       </Box>
     </Box>
   );
-}
+});
 
 function Header({ sessionId }: { sessionId: string }) {
   return (
@@ -180,7 +181,7 @@ function QuickHelp() {
   );
 }
 
-function UserMessage({ content }: { content: string }) {
+const UserMessage = React.memo(function UserMessage({ content }: { content: string }) {
   return (
     <Box marginLeft={1} marginBottom={1}>
       <Text bold color="white">
@@ -189,7 +190,7 @@ function UserMessage({ content }: { content: string }) {
       <Text>{content}</Text>
     </Box>
   );
-}
+});
 
 function ThinkingIndicator({ agent }: { agent: AgentName }) {
   const descriptor = getAgent(agent);
@@ -285,6 +286,7 @@ function App({
     }
     return 0;
   });
+  const [committedCount, setCommittedCount] = useState(showTranscript?.length ?? 0);
 
   const sessionCreatedRef = useRef(!!existingSessionId);
   const ensureSession = (id: string) => {
@@ -323,7 +325,9 @@ function App({
       if (runningRoundRef.current !== null) {
         deleteMessagesFromRound(sessionId, runningRoundRef.current);
         const fromRound = runningRoundRef.current;
-        setMessages((prev) => prev.filter((m) => m.round < fromRound));
+        const remaining = messages.filter((m) => m.round < fromRound);
+        setMessages(remaining);
+        setCommittedCount(remaining.length);
         runningRoundRef.current = null;
       }
 
@@ -424,6 +428,7 @@ function App({
       if (result.status === "fulfilled") {
         const resp = result.value;
         const msg: Message = {
+          id: `${round}-${agent}`,
           role: agent,
           content: resp.error || resp.text,
           round,
@@ -444,6 +449,7 @@ function App({
       } else {
         const errorMsg = result.reason?.message || "Failed to run";
         const msg: Message = {
+          id: `${round}-${agent}`,
           role: agent,
           content: errorMsg,
           round,
@@ -481,6 +487,7 @@ function App({
 
     // Add user message
     const userMsg: Message = {
+      id: `${currentRound}-user`,
       role: "user",
       content: rawInput,
       round: currentRound,
@@ -500,6 +507,7 @@ function App({
     if (newMessages.length === 0) return;
 
     setMessages((prev) => [...prev, ...newMessages]);
+    setCommittedCount((prev) => prev + 1 + newMessages.length);
     setRoundNum(currentRound + 1);
     runningRoundRef.current = null;
 
@@ -523,6 +531,7 @@ function App({
 
     // Add user message
     const userMsg: Message = {
+      id: `${currentRound}-user`,
       role: "user",
       content: `discuss ${prompt}`,
       round: currentRound,
@@ -588,6 +597,8 @@ function App({
       if (newMessages.length === 0) break;
 
       setMessages((prev) => [...prev, ...newMessages]);
+      // Commit completed round to Static (first round includes the user message)
+      setCommittedCount((prev) => prev + (disc === 1 ? 1 : 0) + newMessages.length);
       allMessages = [...allMessages, ...newMessages];
       currentRound++;
 
@@ -656,6 +667,7 @@ function App({
       sessionCreatedRef.current = false;
       setSessionId(newId);
       setMessages([]);
+      setCommittedCount(0);
       setRoundNum(0);
       setConsensusReached(false);
       setDiscussionRound(0);
@@ -679,26 +691,29 @@ function App({
     runRound(value);
   };
 
+  const staticItems = useMemo<Message[]>(() => [
+    { id: `header-${sessionId}`, role: '__header', content: '', round: -1 },
+    ...messages.slice(0, committedCount),
+  ], [sessionId, messages, committedCount]);
+
   return (
     <Box flexDirection="column">
-      <Header sessionId={sessionId} />
+      {/* Finalized messages — rendered once, scroll up naturally */}
+      <Static items={staticItems}>
+        {(item) => {
+          if (item.role === '__header') return <Header key={item.id} sessionId={sessionId} />;
+          if (item.role === 'user') return <UserMessage key={item.id} content={item.content} />;
+          if (isValidAgentName(item.role)) return <AgentResponseBlock key={item.id} agent={item.role} content={item.content} error={item.error} />;
+          return <Box key={item.id} />;
+        }}
+      </Static>
 
       {messages.length === 0 && state === "input" && <QuickHelp />}
 
-      {messages.map((msg, i) => {
-        if (msg.role === "user") {
-          return <UserMessage key={i} content={msg.content} />;
-        }
-        if (isValidAgentName(msg.role)) {
-          return (
-            <AgentResponseBlock
-              key={i}
-              agent={msg.role}
-              content={msg.content}
-              error={msg.error}
-            />
-          );
-        }
+      {/* Active messages — current round, not yet committed */}
+      {messages.slice(committedCount).map((msg) => {
+        if (msg.role === 'user') return <UserMessage key={msg.id} content={msg.content} />;
+        if (isValidAgentName(msg.role)) return <AgentResponseBlock key={msg.id} agent={msg.role} content={msg.content} error={msg.error} />;
         return null;
       })}
 
@@ -768,6 +783,7 @@ export function showTranscriptMarkdown(sessionId: string): string {
 export function showTranscript(sessionId: string): void {
   const dbMessages = getMessages(sessionId);
   const messages: Message[] = dbMessages.map((m) => ({
+    id: `${m.round}-${m.role}`,
     role: m.role,
     content: m.content,
     round: m.round,
@@ -776,13 +792,13 @@ export function showTranscript(sessionId: string): void {
   const { unmount } = render(
     <Box flexDirection="column">
       <Header sessionId={sessionId} />
-      {messages.map((msg, i) => {
+      {messages.map((msg) => {
         if (msg.role === "user") {
-          return <UserMessage key={i} content={msg.content} />;
+          return <UserMessage key={msg.id} content={msg.content} />;
         }
         if (isValidAgentName(msg.role)) {
           return (
-            <AgentResponseBlock key={i} agent={msg.role} content={msg.content} />
+            <AgentResponseBlock key={msg.id} agent={msg.role} content={msg.content} />
           );
         }
         return null;

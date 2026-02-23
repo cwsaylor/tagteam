@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { createRequire } from "node:module";
 import { execSync } from "node:child_process";
 import chalk from "chalk";
 import { loadConfig, setConfigValue } from "./config.js";
@@ -70,7 +71,7 @@ const program = new Command();
 program
   .name("tagteam")
   .description("Tag Team - Orchestrate AI agents collaboratively")
-  .version("0.3.0")
+  .version(createRequire(import.meta.url)("../package.json").version)
   .option("--agents <pair>", "Agent pair to use (comma-separated, e.g. claude,gemini)")
   .option("--claude-model <model>", "Claude model to use")
   .option("--codex-model <model>", "Codex model to use")
@@ -133,6 +134,7 @@ program
 
     const dbMessages = getMessages(session.id);
     const transcript = dbMessages.map((m) => ({
+      id: `${m.round}-${m.role}`,
       role: m.role,
       content: m.content,
       round: m.round,
@@ -195,6 +197,7 @@ program
           const session = sessions[num - 1];
           const dbMessages = getMessages(session.id);
           const transcript = dbMessages.map((m) => ({
+            id: `${m.round}-${m.role}`,
             role: m.role,
             content: m.content,
             round: m.round,
@@ -222,6 +225,7 @@ program
 
     const dbMessages = getMessages(session.id);
     const transcript = dbMessages.map((m) => ({
+      id: `${m.round}-${m.role}`,
       role: m.role,
       content: m.content,
       round: m.round,
