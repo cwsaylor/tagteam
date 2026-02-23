@@ -81,11 +81,20 @@ This works for any agent, not just your active pair. Addressed agents receive th
 
 ### Discussion mode
 
-Have your agents discuss a topic in rounds until they reach consensus:
+Have your agents discuss a topic in structured rounds with research-backed prompting:
 
 ```bash
 tagteam discuss "what's the best approach for caching in this app"
 ```
+
+Discussions use a structured debate protocol informed by multi-agent debate research (Du et al. ICML 2024, ReConcile ACL 2024, CONSENSAGENT ACL Findings 2025, MAD EMNLP 2024):
+
+- **Role differentiation** — each agent has a distinct role (Builder, Verifier, or Strategist) with specific focus areas, and sees an anonymized description of their peer's role
+- **Anti-sycophancy rules** — agents must justify position changes with specific arguments and introduce novel content each round
+- **Structured arguments** — debate responses follow Toulmin structure (claim, evidence, reasoning, caveats) with confidence and position-change markers
+- **Steelman injection** — in round 2, agents are prompted to steelman the opposing view before responding
+- **Smart termination** — discussions end early on mutual consensus, stale debates (no new arguments for 2 rounds), or cyclic position-swapping, with a clear status message explaining why
+- **Context summarization** — rounds 3+ receive a compressed summary of earlier rounds plus full text of the latest exchange, keeping prompts focused
 
 ### Session management
 
@@ -128,7 +137,7 @@ tagteam config set agents claude,gemini
 tagteam config set claude.model sonnet
 tagteam config set codex.model gpt-5.3-codex
 tagteam config set gemini.model gemini-2.5-pro
-tagteam config set discussion.max_rounds 10
+tagteam config set discussion.max_rounds 5
 ```
 
 Default values:
@@ -139,7 +148,7 @@ Default values:
 | `claude.model` | `sonnet` |
 | `codex.model` | `gpt-5.3-codex` |
 | `gemini.model` | `gemini-2.5-pro` |
-| `discussion.max_rounds` | `10` |
+| `discussion.max_rounds` | `5` |
 
 ### CLI options
 

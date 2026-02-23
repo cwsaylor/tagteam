@@ -13,14 +13,23 @@ import { createSession, touchSession, updateSessionTitle } from "./db/sessions.j
 import { insertMessage, getMessages, deleteMessagesFromRound } from "./db/messages.js";
 import { closeDb } from "./db/index.js";
 import {
-  collaborationPrompt,
-  discussionPrompt,
-  debatePrompt,
+  collaborationSystemPrompt,
+  discussionRoundPrompt,
+  debateSystemPrompt,
   debateRoundPrompt,
+  steelmanPrompt,
   directPrompt,
-  CONSENSUS_MARKER,
   formatConversationHistory,
 } from "./prompts.js";
+import {
+  parseRoundAnalysis,
+  checkTermination,
+  terminationMessage,
+  shouldInjectSteelman,
+  buildConversationContext,
+  analysisToMetadata,
+  type DiscussionState,
+} from "./discussion.js";
 import { loadConfig } from "./config.js";
 import type { TagTeamConfig } from "./config.js";
 import { validateAgentPair } from "./agents/registry.js";
@@ -332,6 +341,7 @@ function App({
     target: Target,
     promptOverride?: string,
     isDebate = false,
+    systemPromptPerAgent?: Partial<Record<AgentName, string>>,
   ): Promise<Message[]> => {
     // Determine which agents to run
     const activeAgents: AgentName[] = Array.isArray(target)
@@ -365,15 +375,17 @@ function App({
     };
 
     const agentSystemPrompt = (agent: AgentName) => {
+      // Check per-agent override first (used by runDiscussion for steelman/context)
+      if (systemPromptPerAgent?.[agent]) return systemPromptPerAgent[agent];
       if (isSingleAgent) {
-        return history ? directPrompt(history) : undefined;
+        return history ? directPrompt(agent, history) : undefined;
       }
       if (isDebate) {
-        if (isFirstRound) return debatePrompt(agent, promptPair);
+        if (isFirstRound) return debateSystemPrompt(agent, promptPair);
         return debateRoundPrompt(agent, history, promptPair);
       }
-      if (isFirstRound) return collaborationPrompt(agent, promptPair);
-      return discussionPrompt(agent, history, promptPair);
+      if (isFirstRound) return collaborationSystemPrompt(agent, promptPair);
+      return discussionRoundPrompt(agent, history, promptPair);
     };
 
     const ac = new AbortController();
@@ -418,12 +430,16 @@ function App({
           error: !!resp.error,
         };
         newMessages.push(msg);
+        const metadata = isDebate && !resp.error
+          ? analysisToMetadata(parseRoundAnalysis(agent, resp.text))
+          : undefined;
         insertMessage({
           sessionId,
           role: agent,
           content: resp.error || resp.text,
           round,
           durationMs: resp.durationMs,
+          metadata,
         });
       } else {
         const errorMsg = result.reason?.message || "Failed to run";
@@ -493,6 +509,7 @@ function App({
 
   const runDiscussion = async (prompt: string, adHocPair?: [AgentName, AgentName]) => {
     const discussionTarget: Target = adHocPair ?? "both";
+    const activePair: [AgentName, AgentName] = adHocPair ?? pair;
     setConsensusReached(false);
     let currentRound = roundNum;
     runningRoundRef.current = currentRound;
@@ -520,8 +537,43 @@ function App({
 
     let allMessages = [...messages, userMsg];
 
+    // Initialize discussion state for orchestrator logic
+    const discState: DiscussionState = {
+      round: 0,
+      analyses: [],
+      terminated: false,
+    };
+
     for (let disc = 1; disc <= config.discussion.max_rounds; disc++) {
       setDiscussionRound(disc);
+      discState.round = disc;
+
+      // Build per-agent system prompts based on round
+      let perAgentPrompts: Partial<Record<AgentName, string>> | undefined;
+
+      if (disc >= 2) {
+        const context = buildConversationContext(
+          allMessages.map((m) => ({
+            role: m.role,
+            agent: isValidAgentName(m.role) ? m.role : undefined,
+            content: m.content,
+          })),
+          discState.analyses,
+          disc,
+          activePair,
+        );
+
+        perAgentPrompts = {};
+        for (const agent of activePair) {
+          let prompt_text = "";
+          // Inject steelman in round 2
+          if (shouldInjectSteelman(discState)) {
+            prompt_text += steelmanPrompt();
+          }
+          prompt_text += debateRoundPrompt(agent, context, activePair);
+          perAgentPrompts[agent] = prompt_text;
+        }
+      }
 
       const newMessages = await runAgents(
         allMessages,
@@ -529,6 +581,7 @@ function App({
         discussionTarget,
         disc === 1 ? prompt : "Provide your response for this round.",
         true,
+        perAgentPrompts,
       );
 
       // If aborted, stop the discussion loop
@@ -538,15 +591,26 @@ function App({
       allMessages = [...allMessages, ...newMessages];
       currentRound++;
 
-      // Check for consensus — both active agents must include the marker
-      const activePair = adHocPair ?? pair;
-      const consensusFlags = activePair.map((agent) => {
-        const msg = newMessages.find((m) => m.role === agent && !m.error);
-        return msg?.content.includes(CONSENSUS_MARKER) ?? false;
-      });
+      // Parse round analyses
+      const roundAnalyses = activePair
+        .map((agent) => {
+          const msg = newMessages.find((m) => m.role === agent && !m.error);
+          if (!msg) return null;
+          return parseRoundAnalysis(agent, msg.content);
+        })
+        .filter((a): a is NonNullable<typeof a> => a !== null);
 
-      if (consensusFlags.every(Boolean)) {
-        setConsensusReached(true);
+      discState.analyses.push(roundAnalyses);
+
+      // Check termination
+      const termResult = checkTermination(discState, config.discussion.max_rounds);
+      if (termResult.terminated && termResult.reason) {
+        discState.terminated = true;
+        discState.terminationReason = termResult.reason;
+        setStatusMessage(terminationMessage(termResult.reason));
+        if (termResult.reason === "mutual-consensus") {
+          setConsensusReached(true);
+        }
         break;
       }
     }

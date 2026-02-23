@@ -31,7 +31,7 @@ const DEFAULT_CONFIG: TagTeamConfig = {
     model: "gemini-2.5-pro",
   },
   discussion: {
-    max_rounds: 10,
+    max_rounds: 5,
   },
 };
 

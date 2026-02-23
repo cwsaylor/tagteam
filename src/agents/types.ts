@@ -25,6 +25,12 @@ export interface AgentOptions {
   signal?: AbortSignal;
 }
 
+export interface AgentProfile {
+  strength: string;
+  role: string;
+  focus: string[];
+}
+
 export interface AgentDescriptor {
   name: AgentName;
   displayName: string;
@@ -32,5 +38,6 @@ export interface AgentDescriptor {
   cliBinary: string;
   installUrl: string;
   org: string;
+  profile: AgentProfile;
   run: (options: AgentOptions) => Promise<AgentResponse>;
 }

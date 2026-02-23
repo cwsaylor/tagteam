@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-02-22
+
+### Added
+
+- Research-backed structured discussion prompts informed by multi-agent debate literature (Du et al. ICML 2024, ReConcile ACL 2024, CONSENSAGENT ACL Findings 2025, MAD EMNLP 2024)
+- Agent role differentiation — Claude (Builder), Codex (Verifier), Gemini (Strategist) with distinct focus areas and anonymized peer descriptions
+- Anti-sycophancy rules requiring agents to justify position changes and introduce novel content each round
+- Toulmin-structured arguments in debate mode (claim, evidence, reasoning, caveats)
+- Confidence and position-change markers (CONFIDENCE: HIGH/MEDIUM/LOW, POSITION: HELD/PARTIALLY_CHANGED/CHANGED)
+- Steelman injection in round 2 of discussions — agents must argue against their own position before responding
+- Smart termination detecting mutual consensus, stale debates, and cyclic position-swapping
+- Context summarization for rounds 3+ to keep prompts focused
+- Per-message metadata storage for parsed debate markers (confidence, position, consensus signal)
+
+### Changed
+
+- Default `discussion.max_rounds` lowered from 10 to 5 (structured prompts reach better outcomes faster)
+- Direct agent addressing now includes agent-specific focus areas in the prompt
+- Discussion mode uses tiered context: full history for rounds 1-2, structured summary + latest exchange for round 3+
+
 ## [0.3.0] - 2026-02-22
 
 ### Added

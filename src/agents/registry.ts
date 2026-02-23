@@ -1,4 +1,4 @@
-import type { AgentDescriptor, AgentName } from "./types.js";
+import type { AgentDescriptor, AgentName, AgentProfile } from "./types.js";
 import { runClaude } from "./claude.js";
 import { runCodex } from "./codex.js";
 import { runGemini } from "./gemini.js";
@@ -11,6 +11,16 @@ const AGENTS: Record<AgentName, AgentDescriptor> = {
     cliBinary: "claude",
     installUrl: "https://docs.anthropic.com/en/docs/claude-code",
     org: "Anthropic",
+    profile: {
+      strength: "architecture-implementation",
+      role: "The Builder",
+      focus: [
+        "multi-file coherence and refactoring",
+        "production-quality implementation",
+        "design patterns and maintainability",
+        "comprehensive working solutions",
+      ],
+    },
     run: runClaude,
   },
   codex: {
@@ -20,6 +30,16 @@ const AGENTS: Record<AgentName, AgentDescriptor> = {
     cliBinary: "codex",
     installUrl: "https://github.com/openai/codex",
     org: "OpenAI",
+    profile: {
+      strength: "correctness-verification",
+      role: "The Verifier",
+      focus: [
+        "algorithmic correctness and edge cases",
+        "test coverage and failure modes",
+        "standards compliance and best practices",
+        "performance characteristics and benchmarks",
+      ],
+    },
     run: runCodex,
   },
   gemini: {
@@ -29,12 +49,50 @@ const AGENTS: Record<AgentName, AgentDescriptor> = {
     cliBinary: "gemini",
     installUrl: "https://github.com/google-gemini/gemini-cli",
     org: "Google",
+    profile: {
+      strength: "context-strategy",
+      role: "The Strategist",
+      focus: [
+        "broad codebase context and upstream/downstream effects",
+        "current ecosystem conventions and documentation",
+        "architectural fit and scope assessment",
+        "planning, decomposition, and tradeoff analysis",
+      ],
+    },
     run: runGemini,
+  },
+};
+
+// Anonymized peer role descriptions keyed by sorted pair string
+const PEER_ROLES: Record<string, Record<AgentName, string>> = {
+  "claude,codex": {
+    claude: "Correctness & Standards — they verify edge cases, test coverage, and standards compliance",
+    codex: "Architecture & Implementation — they propose complete solutions and assess structural coherence",
+    gemini: "", // not in this pair
+  },
+  "claude,gemini": {
+    claude: "Strategic Context — they assess broad codebase fit, ecosystem conventions, and architectural tradeoffs",
+    gemini: "Architecture & Implementation — they propose complete solutions and assess structural coherence",
+    codex: "", // not in this pair
+  },
+  "codex,gemini": {
+    codex: "Strategic Context — they assess broad codebase fit, ecosystem conventions, and architectural tradeoffs",
+    gemini: "Correctness & Standards — they verify edge cases, test coverage, and standards compliance",
+    claude: "", // not in this pair
   },
 };
 
 export function getAgent(name: AgentName): AgentDescriptor {
   return AGENTS[name];
+}
+
+export function getAgentProfile(name: AgentName): AgentProfile {
+  return AGENTS[name].profile;
+}
+
+export function getPeerRoleDescription(agent: AgentName, pair: [AgentName, AgentName]): string {
+  const key = [...pair].sort().join(",");
+  return PEER_ROLES[key]?.[agent] ?? "";
 }
 
 export function getAllAgentNames(): AgentName[] {
