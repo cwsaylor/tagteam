@@ -1,6 +1,6 @@
 # tagteam
 
-Orchestrate AI agents in collaborative sessions. Pick any two from Claude, Codex, and Gemini — send a prompt to both simultaneously, then let them build on each other's responses in multi-round discussions.
+Orchestrate AI agents in collaborative sessions. Pick any two from Claude, Codex, and Gemini — send a prompt to both simultaneously, then let them build on each other's responses in multi-round discussions. Discussion mode uses a structured multi-agent debate protocol informed by recent research showing that LLMs produce more accurate, well-reasoned outputs when they critique and refine each other's arguments.
 
 ## Install
 

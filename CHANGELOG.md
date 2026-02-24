@@ -4,11 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.4.4] - 2026-02-23
+## [0.4.4] - 2026-02-24
 
 ### Added
 
 - Prompt history with up/down arrow navigation — cycle through previously submitted prompts, matching standard shell/REPL behavior
+
+### Fixed
+
+- Phantom cursor no longer blinks in the lower-left corner during agent runs — agent subprocess stderr is now piped instead of inherited, preventing raw writes from corrupting Ink's cursor state
 
 ## [0.4.3] - 2026-02-23
 
