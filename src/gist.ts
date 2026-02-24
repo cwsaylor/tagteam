@@ -20,11 +20,12 @@ export function createGist(content: string, filename: string): string {
 
   try {
     const result = execSync(
-      `gh gist create --private --filename "${filename}" -`,
-      { input: content, stdio: ["pipe", "pipe", "ignore"] }
+      `gh gist create --filename "${filename}" -`,
+      { input: content, stdio: ["pipe", "pipe", "pipe"], encoding: "utf-8" }
     );
-    return result.toString().trim();
-  } catch {
-    throw new Error("Failed to create gist.");
+    return result.trim();
+  } catch (e: any) {
+    const stderr = e.stderr?.toString().trim();
+    throw new Error(stderr || "Failed to create gist.");
   }
 }
