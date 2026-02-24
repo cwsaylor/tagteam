@@ -225,22 +225,26 @@ function ConsensusReached() {
   );
 }
 
+// Session-scoped prompt history — persists across PromptInput mount/unmount cycles
+const promptHistory: string[] = [];
+
+type PromptControl = { setValue: (v: string) => void; getValue: () => string };
+
 function PromptInput({
   onSubmit,
+  controlRef,
 }: {
   onSubmit: (value: string) => void;
+  controlRef: React.MutableRefObject<PromptControl | null>;
 }) {
   const [value, setValue] = useState("");
+  const valueRef = useRef("");
+  valueRef.current = value;
 
-  const handleSubmit = useCallback(
-    (submitted: string) => {
-      if (submitted.trim()) {
-        onSubmit(submitted.trim());
-        setValue("");
-      }
-    },
-    [onSubmit]
-  );
+  useEffect(() => {
+    controlRef.current = { setValue, getValue: () => valueRef.current };
+    return () => { controlRef.current = null; };
+  }, [controlRef]);
 
   return (
     <Box marginLeft={1}>
@@ -250,7 +254,12 @@ function PromptInput({
       <TextInput
         value={value}
         onChange={setValue}
-        onSubmit={handleSubmit}
+        onSubmit={(submitted) => {
+          if (submitted.trim()) {
+            onSubmit(submitted.trim());
+            setValue("");
+          }
+        }}
         showCursor
       />
     </Box>
@@ -288,6 +297,9 @@ function App({
     return 0;
   });
   const [committedCount, setCommittedCount] = useState(showTranscript?.length ?? 0);
+  const promptControlRef = useRef<PromptControl | null>(null);
+  const historyIndexRef = useRef(-1);
+  const savedInputRef = useRef("");
 
   const sessionCreatedRef = useRef(!!existingSessionId);
   const ensureSession = (id: string) => {
@@ -311,7 +323,7 @@ function App({
   const abortRef = useRef<AbortController | null>(null);
   const runningRoundRef = useRef<number | null>(null);
 
-  // Ctrl+C and Escape handling
+  // Keyboard handling (Ctrl+C, Escape, and prompt history navigation)
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
       abortRef.current?.abort();
@@ -336,6 +348,27 @@ function App({
       setDiscussionRound(0);
       setStatusMessage("Interrupted.");
       setState("input");
+    }
+    // Up/down arrow prompt history (only when prompt is visible)
+    if (state === "input" && key.upArrow && promptHistory.length > 0) {
+      if (historyIndexRef.current === -1) {
+        savedInputRef.current = promptControlRef.current?.getValue() ?? "";
+      }
+      const nextIndex = historyIndexRef.current === -1
+        ? promptHistory.length - 1
+        : Math.max(0, historyIndexRef.current - 1);
+      historyIndexRef.current = nextIndex;
+      promptControlRef.current?.setValue(promptHistory[nextIndex]);
+    }
+    if (state === "input" && key.downArrow && historyIndexRef.current !== -1) {
+      if (historyIndexRef.current >= promptHistory.length - 1) {
+        historyIndexRef.current = -1;
+        promptControlRef.current?.setValue(savedInputRef.current);
+      } else {
+        const nextIndex = historyIndexRef.current + 1;
+        historyIndexRef.current = nextIndex;
+        promptControlRef.current?.setValue(promptHistory[nextIndex]);
+      }
     }
   });
 
@@ -636,6 +669,9 @@ function App({
 
   const handleSubmit = (value: string) => {
     setStatusMessage(null);
+    promptHistory.push(value);
+    historyIndexRef.current = -1;
+    savedInputRef.current = "";
 
     if (value === "/exit") {
       closeDb();
@@ -777,7 +813,7 @@ function App({
         />
       )}
 
-      {state === "input" && <PromptInput onSubmit={handleSubmit} />}
+      {state === "input" && <PromptInput onSubmit={handleSubmit} controlRef={promptControlRef} />}
     </Box>
   );
 }
