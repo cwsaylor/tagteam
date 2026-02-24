@@ -53,6 +53,13 @@ const CONFIG_FIELDS: ConfigField[] = [
     get: (c) => String(c.discussion.max_rounds),
     type: "number",
   },
+  {
+    key: "expansion.enabled",
+    label: "Prompt expansion",
+    get: (c) => String(c.expansion.enabled),
+    type: "string",
+    validate: (v) => (v !== "true" && v !== "false") ? "Must be 'true' or 'false'" : null,
+  },
 ];
 
 const LABEL_WIDTH = Math.max(...CONFIG_FIELDS.map((f) => f.label.length));

@@ -361,6 +361,9 @@ configCmd
     console.log(
       chalk.dim(" discussion.max_rounds = ") + chalk.white(String(config.discussion.max_rounds))
     );
+    console.log(
+      chalk.dim(" expansion.enabled = ") + chalk.white(String(config.expansion.enabled))
+    );
     console.log();
   });
 

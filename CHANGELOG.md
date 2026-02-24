@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.5] - 2026-02-24
+
+### Added
+
+- LLM-powered prompt expansion — terse prompts are automatically expanded into specific, actionable versions using project context before sending to agents. Disabled by default; enable with `tagteam config set expansion.enabled true`
+- Expanded prompt displayed in the UI between the user message and agent responses
+- Expanding spinner shown during prompt expansion, abortable with Escape
+- Expansion uses a fast/cheap model (Haiku, Gemini Flash, or Codex) for low latency
+
 ## [0.4.4] - 2026-02-24
 
 ### Added

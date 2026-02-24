@@ -33,6 +33,7 @@ import {
 } from "./discussion.js";
 import { loadConfig } from "./config.js";
 import type { TagTeamConfig } from "./config.js";
+import { expandPrompt } from "./expand.js";
 import { validateAgentPair } from "./agents/registry.js";
 import { InlineConfigEditor } from "./config-editor.js";
 
@@ -193,6 +194,17 @@ const UserMessage = React.memo(function UserMessage({ content }: { content: stri
   );
 });
 
+const ExpandedPromptBlock = React.memo(function ExpandedPromptBlock({ content }: { content: string }) {
+  return (
+    <Box flexDirection="column" marginLeft={1} marginBottom={1}>
+      <Text color="yellow" dimColor>Expanded prompt:</Text>
+      <Box marginLeft={2}>
+        <Text>{content}</Text>
+      </Box>
+    </Box>
+  );
+});
+
 function ThinkingIndicator({ agent }: { agent: AgentName }) {
   const descriptor = getAgent(agent);
   return (
@@ -289,6 +301,7 @@ function App({
   const [thinkingAgents, setThinkingAgents] = useState<AgentName[]>([]);
   const [discussionRound, setDiscussionRound] = useState(0);
   const [consensusReached, setConsensusReached] = useState(false);
+  const [expanding, setExpanding] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [roundNum, setRoundNum] = useState(() => {
     if (showTranscript && showTranscript.length > 0) {
@@ -345,6 +358,7 @@ function App({
       }
 
       setThinkingAgents([]);
+      setExpanding(false);
       setDiscussionRound(0);
       setStatusMessage("Interrupted.");
       setState("input");
@@ -426,7 +440,7 @@ function App({
       return discussionRoundPrompt(agent, history, promptPair);
     };
 
-    const ac = new AbortController();
+    const ac = abortRef.current ?? new AbortController();
     abortRef.current = ac;
 
     const results: Array<{ agent: AgentName; result: PromiseSettledResult<AgentResponse> }> = [];
@@ -534,14 +548,50 @@ function App({
       round: currentRound,
     });
 
-    const allMessages = [...messages, userMsg];
-    const newMessages = await runAgents(allMessages, currentRound, target);
+    let allMessages = [...messages, userMsg];
+    let effectivePrompt: string | undefined;
+
+    // Expand the prompt on first round of a new session
+    if (config.expansion.enabled && currentRound === 0 && !existingSessionId) {
+      const ac = new AbortController();
+      abortRef.current = ac;
+      setExpanding(true);
+      try {
+        const result = await expandPrompt(prompt, pair[0], process.cwd(), ac.signal);
+        if (result.expanded !== result.original) {
+          const expandedMsg: Message = {
+            id: `${currentRound}-expanded`,
+            role: "expanded",
+            content: result.expanded,
+            round: currentRound,
+          };
+          setMessages((prev) => [...prev, expandedMsg]);
+          insertMessage({
+            sessionId,
+            role: "expanded",
+            content: result.expanded,
+            round: currentRound,
+          });
+          allMessages = [...allMessages, expandedMsg];
+          effectivePrompt = result.expanded;
+        }
+      } catch {
+        // Silent fallback to original prompt
+      } finally {
+        setExpanding(false);
+      }
+      // If aborted during expansion, bail out
+      if (ac.signal.aborted) return;
+    }
+
+    const newMessages = await runAgents(allMessages, currentRound, target, effectivePrompt);
 
     // If aborted, the Escape handler already cleaned up
     if (newMessages.length === 0) return;
 
+    const expandedCount = effectivePrompt ? 1 : 0;
     setMessages((prev) => [...prev, ...newMessages]);
-    setCommittedCount((prev) => prev + 1 + newMessages.length);
+    setCommittedCount((prev) => prev + 1 + expandedCount + newMessages.length);
     setRoundNum(currentRound + 1);
     runningRoundRef.current = null;
 
@@ -579,6 +629,40 @@ function App({
     });
 
     let allMessages = [...messages, userMsg];
+    let effectivePrompt: string | undefined;
+
+    // Expand the prompt on first round of a new session
+    if (config.expansion.enabled && currentRound === 0 && !existingSessionId) {
+      const ac = new AbortController();
+      abortRef.current = ac;
+      setExpanding(true);
+      try {
+        const result = await expandPrompt(prompt, activePair[0], process.cwd(), ac.signal);
+        if (result.expanded !== result.original) {
+          const expandedMsg: Message = {
+            id: `${currentRound}-expanded`,
+            role: "expanded",
+            content: result.expanded,
+            round: currentRound,
+          };
+          setMessages((prev) => [...prev, expandedMsg]);
+          insertMessage({
+            sessionId,
+            role: "expanded",
+            content: result.expanded,
+            round: currentRound,
+          });
+          allMessages = [...allMessages, expandedMsg];
+          effectivePrompt = result.expanded;
+        }
+      } catch {
+        // Silent fallback to original prompt
+      } finally {
+        setExpanding(false);
+      }
+      // If aborted during expansion, bail out
+      if (ac.signal.aborted) return;
+    }
 
     // Initialize discussion state for orchestrator logic
     const discState: DiscussionState = {
@@ -622,7 +706,7 @@ function App({
         allMessages,
         currentRound,
         discussionTarget,
-        disc === 1 ? prompt : "Provide your response for this round.",
+        disc === 1 ? (effectivePrompt ?? prompt) : "Provide your response for this round.",
         true,
         perAgentPrompts,
       );
@@ -631,8 +715,9 @@ function App({
       if (newMessages.length === 0) break;
 
       setMessages((prev) => [...prev, ...newMessages]);
-      // Commit completed round to Static (first round includes the user message)
-      setCommittedCount((prev) => prev + (disc === 1 ? 1 : 0) + newMessages.length);
+      // Commit completed round to Static (first round includes the user message + optional expanded)
+      const expandedCount = disc === 1 && effectivePrompt ? 1 : 0;
+      setCommittedCount((prev) => prev + (disc === 1 ? 1 : 0) + expandedCount + newMessages.length);
       allMessages = [...allMessages, ...newMessages];
       currentRound++;
 
@@ -757,6 +842,7 @@ function App({
         {(item) => {
           if (item.role === '__header') return <Header key={item.id} sessionId={sessionId} />;
           if (item.role === 'user') return <UserMessage key={item.id} content={item.content} />;
+          if (item.role === 'expanded') return <ExpandedPromptBlock key={item.id} content={item.content} />;
           if (isValidAgentName(item.role)) return <AgentResponseBlock key={item.id} agent={item.role} content={item.content} error={item.error} />;
           return <Box key={item.id} />;
         }}
@@ -767,9 +853,17 @@ function App({
       {/* Active messages — current round, not yet committed */}
       {messages.slice(committedCount).map((msg) => {
         if (msg.role === 'user') return <UserMessage key={msg.id} content={msg.content} />;
+        if (msg.role === 'expanded') return <ExpandedPromptBlock key={msg.id} content={msg.content} />;
         if (isValidAgentName(msg.role)) return <AgentResponseBlock key={msg.id} agent={msg.role} content={msg.content} error={msg.error} />;
         return null;
       })}
+
+      {expanding && (
+        <Box marginLeft={1}>
+          <Text color="yellow"><Spinner type="dots" /></Text>
+          <Text color="yellow"> Expanding prompt…</Text>
+        </Box>
+      )}
 
       {discussionRound > 0 && thinkingAgents.length > 0 && (
         <DiscussionStatus round={discussionRound} maxRounds={config.discussion.max_rounds} />
@@ -849,6 +943,9 @@ export function showTranscript(sessionId: string): void {
       {messages.map((msg) => {
         if (msg.role === "user") {
           return <UserMessage key={msg.id} content={msg.content} />;
+        }
+        if (msg.role === "expanded") {
+          return <ExpandedPromptBlock key={msg.id} content={msg.content} />;
         }
         if (isValidAgentName(msg.role)) {
           return (

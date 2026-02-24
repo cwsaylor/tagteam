@@ -17,6 +17,9 @@ export interface TagTeamConfig {
   discussion: {
     max_rounds: number;
   };
+  expansion: {
+    enabled: boolean;
+  };
 }
 
 const DEFAULT_CONFIG: TagTeamConfig = {
@@ -32,6 +35,9 @@ const DEFAULT_CONFIG: TagTeamConfig = {
   },
   discussion: {
     max_rounds: 5,
+  },
+  expansion: {
+    enabled: false,
   },
 };
 
@@ -74,6 +80,7 @@ export function loadConfig(): TagTeamConfig {
       codex: { ...DEFAULT_CONFIG.codex, ...parsed.codex },
       gemini: { ...DEFAULT_CONFIG.gemini, ...parsed.gemini },
       discussion: { ...DEFAULT_CONFIG.discussion, ...parsed.discussion },
+      expansion: { ...DEFAULT_CONFIG.expansion, ...parsed.expansion },
     };
   } catch {
     return { ...DEFAULT_CONFIG };
@@ -110,6 +117,9 @@ export function setConfigValue(
       case "discussion_max_rounds":
         config.discussion.max_rounds = Number(value);
         break;
+      case "expansion_enabled":
+        config.expansion.enabled = value.toLowerCase() === "true";
+        break;
       default:
         throw new Error(`Unknown config key: ${key}`);
     }
@@ -123,6 +133,8 @@ export function setConfigValue(
       config.gemini.model = value;
     } else if (section === "discussion" && field === "max_rounds") {
       config.discussion.max_rounds = Number(value);
+    } else if (section === "expansion" && field === "enabled") {
+      config.expansion.enabled = value.toLowerCase() === "true";
     } else {
       throw new Error(`Unknown config key: ${key}`);
     }
