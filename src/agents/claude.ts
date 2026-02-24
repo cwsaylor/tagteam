@@ -34,7 +34,7 @@ async function* streamClaude(
 
   const proc = spawn("claude", args, {
     cwd: options.cwd,
-    stdio: ["ignore", "pipe", "inherit"],
+    stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, CLAUDECODE: "" },
   });
 

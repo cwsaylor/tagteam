@@ -30,7 +30,7 @@ async function* streamGemini(
 
   const proc = spawn("gemini", args, {
     cwd: options.cwd,
-    stdio: ["ignore", "pipe", "inherit"],
+    stdio: ["ignore", "pipe", "pipe"],
     env: process.env,
   });
 
