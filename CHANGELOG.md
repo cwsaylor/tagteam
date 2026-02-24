@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.3] - 2026-02-23
+
+### Fixed
+
+- `/gist` now works correctly — removed invalid `--private` flag (`gh` creates secret gists by default)
+- `/gist` errors from `gh` are now surfaced to the user instead of a generic failure message
+
 ## [0.4.2] - 2026-02-23
 
 ### Added
