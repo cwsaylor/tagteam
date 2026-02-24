@@ -167,6 +167,7 @@ While in a session, type these slash commands:
 - `/new` - Start a fresh session
 - `/config` - Open the config editor (changes take effect immediately)
 - `/copy` - Copy conversation to clipboard
+- `/gist` - Create a private GitHub Gist of the conversation (requires [`gh`](https://cli.github.com))
 - `/exit` - Exit the app
 - `Escape` - Interrupt running agents
 

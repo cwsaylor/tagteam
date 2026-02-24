@@ -9,6 +9,7 @@ import type { AgentName, AgentResponse } from "./agents/types.js";
 import { getAgent, getAllAgentNames, isValidAgentName } from "./agents/registry.js";
 import { formatAsMarkdown } from "./format.js";
 import { copyToClipboard } from "./clipboard.js";
+import { createGist } from "./gist.js";
 import { createSession, touchSession, updateSessionTitle } from "./db/sessions.js";
 import { insertMessage, getMessages, deleteMessagesFromRound } from "./db/messages.js";
 import { closeDb } from "./db/index.js";
@@ -649,6 +650,7 @@ function App({
           "/config  Edit configuration",
           "/new     Start a new session",
           "/copy    Copy conversation to clipboard",
+          "/gist    Create a private GitHub gist",
           "/exit    Exit the app",
           "",
           "Esc      Interrupt running agents",
@@ -682,6 +684,22 @@ function App({
         setStatusMessage("Copied conversation to clipboard.");
       } catch {
         setStatusMessage("Failed to copy to clipboard.");
+      }
+      return;
+    }
+
+    if (value === "/gist") {
+      if (messages.length === 0) {
+        setStatusMessage("Nothing to gist.");
+        return;
+      }
+      try {
+        const md = formatAsMarkdown(messages);
+        const filename = `tagteam-${sessionId.slice(0, 7)}.md`;
+        const url = createGist(md, filename);
+        setStatusMessage(`Gist created: ${url}`);
+      } catch (e: any) {
+        setStatusMessage(e.message || "Failed to create gist.");
       }
       return;
     }
