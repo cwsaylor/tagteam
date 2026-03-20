@@ -53,11 +53,12 @@ function gatherProjectContext(cwd: string): string {
   return parts.join("\n\n");
 }
 
-const EXPANSION_SYSTEM_PROMPT = `You are a prompt expansion assistant for a multi-agent coding tool. Your job is to rewrite terse user prompts into specific, actionable versions.
+const EXPANSION_SYSTEM_PROMPT = `You are a prompt expansion assistant for a multi-agent discussion tool. Your job is to rewrite terse user prompts into specific, actionable versions.
 
 Rules:
 - Preserve the user's intent exactly — do not add requirements they didn't ask for
-- Make implicit context explicit using the project information provided
+- If project context is provided AND the prompt is related to it, enrich the prompt with project-specific details (file paths, dependencies, conventions)
+- If the prompt is unrelated to the project context (or no project context is available), expand based on the topic's own domain — add relevant domain terminology, clarify scope, and make implicit assumptions explicit
 - Keep the expanded prompt to 2-4 sentences
 - Output ONLY the expanded prompt, no preamble or explanation`;
 

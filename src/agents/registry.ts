@@ -12,13 +12,13 @@ const AGENTS: Record<AgentName, AgentDescriptor> = {
     installUrl: "https://docs.anthropic.com/en/docs/claude-code",
     org: "Anthropic",
     profile: {
-      strength: "architecture-implementation",
-      role: "The Builder",
+      strength: "structure-synthesis",
+      role: "The Architect",
       focus: [
-        "multi-file coherence and refactoring",
-        "production-quality implementation",
-        "design patterns and maintainability",
-        "comprehensive working solutions",
+        "structural coherence and organization",
+        "concrete actionable proposals",
+        "practical feasibility and constraints",
+        "synthesizing competing requirements",
       ],
     },
     run: runClaude,
@@ -31,13 +31,13 @@ const AGENTS: Record<AgentName, AgentDescriptor> = {
     installUrl: "https://github.com/openai/codex",
     org: "OpenAI",
     profile: {
-      strength: "correctness-verification",
-      role: "The Verifier",
+      strength: "rigor-verification",
+      role: "The Critic",
       focus: [
-        "algorithmic correctness and edge cases",
-        "test coverage and failure modes",
-        "standards compliance and best practices",
-        "performance characteristics and benchmarks",
+        "logical correctness and counterexamples",
+        "edge cases and failure modes",
+        "evidential standards and precision of definitions",
+        "identifying unsupported claims and assumptions",
       ],
     },
     run: runCodex,
@@ -53,10 +53,10 @@ const AGENTS: Record<AgentName, AgentDescriptor> = {
       strength: "context-strategy",
       role: "The Strategist",
       focus: [
-        "broad codebase context and upstream/downstream effects",
-        "current ecosystem conventions and documentation",
-        "architectural fit and scope assessment",
-        "planning, decomposition, and tradeoff analysis",
+        "broader context and upstream/downstream implications",
+        "alternative framings and perspectives",
+        "scope assessment and tradeoff analysis",
+        "planning, decomposition, and long-term effects",
       ],
     },
     run: runGemini,
@@ -66,18 +66,18 @@ const AGENTS: Record<AgentName, AgentDescriptor> = {
 // Anonymized peer role descriptions keyed by sorted pair string
 const PEER_ROLES: Record<string, Record<AgentName, string>> = {
   "claude,codex": {
-    claude: "Correctness & Standards — they verify edge cases, test coverage, and standards compliance",
-    codex: "Architecture & Implementation — they propose complete solutions and assess structural coherence",
+    claude: "Rigor & Verification — they stress-test logic, find counterexamples, and demand evidence",
+    codex: "Structure & Synthesis — they propose coherent solutions, integrate constraints, and ensure feasibility",
     gemini: "", // not in this pair
   },
   "claude,gemini": {
-    claude: "Strategic Context — they assess broad codebase fit, ecosystem conventions, and architectural tradeoffs",
-    gemini: "Architecture & Implementation — they propose complete solutions and assess structural coherence",
+    claude: "Context & Strategy — they assess broader implications, alternative framings, and upstream/downstream effects",
+    gemini: "Structure & Synthesis — they propose coherent solutions, integrate constraints, and ensure feasibility",
     codex: "", // not in this pair
   },
   "codex,gemini": {
-    codex: "Strategic Context — they assess broad codebase fit, ecosystem conventions, and architectural tradeoffs",
-    gemini: "Correctness & Standards — they verify edge cases, test coverage, and standards compliance",
+    codex: "Context & Strategy — they assess broader implications, alternative framings, and upstream/downstream effects",
+    gemini: "Rigor & Verification — they stress-test logic, find counterexamples, and demand evidence",
     claude: "", // not in this pair
   },
 };

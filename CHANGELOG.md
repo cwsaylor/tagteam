@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-03-19
+
+### Changed
+
+- Agent roles and prompts are now domain-agnostic — agents work as general-purpose analysts (Architect/Critic/Strategist) rather than code-specific reviewers, enabling meaningful discussion on any topic (political science, philosophy, business strategy, etc.)
+- Prompt expansion is now domain-aware — enriches with project context when relevant, otherwise expands based on the topic's own domain
+- All prompt templates updated: removed code-specific language ("code examples", "algorithmic correctness", "codebase") in favor of general analytical framing
+
 ## [0.4.5] - 2026-02-24
 
 ### Added
